@@ -1,3 +1,4 @@
+import type { Express, Response } from 'express';
 import {
   Controller,
   Post,
@@ -7,7 +8,14 @@ import {
   Param,
   Body,
   UseGuards,
+  UseInterceptors,
+  UploadedFile,
+  Req,
+  Res,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+
+
 import { LessonsService } from './lessons.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
@@ -16,11 +24,15 @@ import { Role } from '@prisma/client';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { CreateLessonDto } from './dto/create-lesson.dto';
 import { UpdateLessonDto } from './dto/update-lesson.dto';
+import { PrismaService } from 'src/prisma/prisma.service';
+import { SubmissionsService } from '../submissions/submissions.service';
 
 @Controller('api/v1/lessons')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class LessonsController {
-  constructor(private lessons: LessonsService) {}
+  constructor(private lessons: LessonsService,
+    private prisma: PrismaService,
+  ) {}
 
   @Post()
   @Roles(Role.ADMIN)
@@ -62,5 +74,26 @@ export class LessonsController {
     @Param('id') id: string,
   ) {
     return this.lessons.publish(actor, id);
+  }
+
+  // 🔥 ADMIN VIDEO UPLOAD
+  @Post(':id/video')
+  @Roles(Role.ADMIN)
+  @UseInterceptors(FileInterceptor('file', { dest: '/tmp' }))
+  async uploadLessonVideo(
+    @Param('id') id: string,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    return this.lessons.processVideo(id, file.path);
+  }
+
+  // 🔥 USER STREAM ENDPOINT
+  @Get(':id/stream')
+  async streamLesson(
+    @Param('id') id: string,
+    @CurrentUser() user: any,
+    @Res() res: Response,
+  ) {
+    return this.lessons.streamLesson(id, user.sub, res);
   }
 }

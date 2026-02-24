@@ -1,10 +1,10 @@
-import { Injectable, ForbiddenException } from '@nestjs/common';
+import { Injectable,NotFoundException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { Role } from '@prisma/client';
 
 @Injectable()
 export class CoursesService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService) { }
 
   async create(actor: any, dto: any) {
     if (actor.role !== Role.ADMIN)
@@ -48,6 +48,64 @@ export class CoursesService {
         total,
       },
     };
+  }
+
+  async enroll(userId: string, courseId: string) {
+    return this.prisma.$transaction(async (tx) => {
+
+      const course = await tx.course.findUnique({
+        where: { id: courseId },
+      });
+
+      if (!course || !course.isPublished)
+        throw new NotFoundException('Course not found');
+
+      const existing = await tx.enrollment.findFirst({
+        where: { userId, courseId },
+      });
+
+      if (existing)
+        throw new ForbiddenException('Already enrolled');
+
+      // FREE COURSE
+      if (course.priceType === 'FREE') {
+        return tx.enrollment.create({
+          data: { userId, courseId },
+        });
+      }
+
+      // COIN COURSE
+      if (course.priceType === 'COINS') {
+
+        if (!course.coinPrice)
+          throw new ForbiddenException('Invalid course price');
+
+        const balance = await tx.coinEvent.aggregate({
+          where: { userId },
+          _sum: { amount: true },
+        });
+
+        const userBalance = balance._sum.amount || 0;
+
+        if (userBalance < course.coinPrice)
+          throw new ForbiddenException('Not enough coins');
+
+        // deduct coins
+        await tx.coinEvent.create({
+          data: {
+            userId,
+            amount: -course.coinPrice,
+            reason: 'TRANSFER_OUT',
+          },
+        });
+
+        return tx.enrollment.create({
+          data: { userId, courseId },
+        });
+      }
+
+      throw new ForbiddenException('Unsupported payment type');
+    });
   }
 
   async getBySlug(slug: string) {

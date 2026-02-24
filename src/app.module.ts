@@ -33,6 +33,7 @@ import { AdminModule } from './modules/admin/admin.module';
     SubmissionsModule,
     EnrollmentModule,
     UploadModule,
+    NotificationsModule,
     
 
     LoggerModule.forRoot({

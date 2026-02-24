@@ -23,22 +23,24 @@ enum AuditAction {
 }
 
 model User {
-  id           String           @id @default(uuid())
-  email        String           @unique
-  username     String           @unique
-  passwordHash String
-  displayName  String
-  phone        String?
-  avatar       String?
-  bio          String?
-  role         Role             @default(STUDENT)
-  xpEvents     XpEvent[]
-  coinEvents   CoinEvent[]
-  wallet       Wallet?
-  progress     LessonProgress[]
-  submissions  Submission[]
-  enrollments  Enrollment[]
-  notifications Notification[]
+  id               String                  @id @default(uuid())
+  email            String                  @unique
+  username         String                  @unique
+  passwordHash     String
+  displayName      String
+  phone            String?
+  avatar           String?
+  bio              String?
+  role             Role                    @default(STUDENT)
+  xpEvents         XpEvent[]
+  coinEvents       CoinEvent[]
+  wallet           Wallet?
+  progress         LessonProgress[]
+  submissions      Submission[]
+  enrollments      Enrollment[]
+  notifications    Notification[]
+  purchaseRequests CoursePurchaseRequest[]
+  courseReviews    CourseReview[]
 
   isEmailVerified Boolean   @default(false)
   failedAttempts  Int       @default(0)
@@ -102,8 +104,11 @@ model Course {
   categoryId String
   category   Category @relation(fields: [categoryId], references: [id])
 
-  lessons Lesson[]
+  lessons     Lesson[]
   enrollments Enrollment[]
+
+  purchaseRequests CoursePurchaseRequest[]
+  reviews          CourseReview[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -121,6 +126,7 @@ model Lesson {
   courseId String
   course   Course @relation(fields: [courseId], references: [id])
 
+  videoKey    String?
   isPublished Boolean @default(false)
 
   createdAt DateTime @default(now())
@@ -233,11 +239,10 @@ model Submission {
   @@index([assignmentId])
 }
 
-
 model Enrollment {
-  id        String   @id @default(uuid())
-  userId    String
-  courseId  String
+  id       String @id @default(uuid())
+  userId   String
+  courseId String
 
   createdAt DateTime @default(now())
 
@@ -248,7 +253,6 @@ model Enrollment {
   @@index([courseId])
 }
 
-
 enum NotificationType {
   SYSTEM
   NEWS
@@ -257,18 +261,49 @@ enum NotificationType {
 }
 
 model Notification {
-  id        String            @id @default(uuid())
-  userId    String?
-  type      NotificationType
-  title     String
-  body      String
-  link      String?
-  isRead    Boolean           @default(false)
+  id     String           @id @default(uuid())
+  userId String?
+  type   NotificationType
+  title  String
+  body   String
+  link   String?
+  isRead Boolean          @default(false)
 
-  createdAt DateTime          @default(now())
+  createdAt DateTime @default(now())
 
   user User? @relation(fields: [userId], references: [id])
 
   @@index([userId])
   @@index([createdAt])
+}
+
+model CoursePurchaseRequest {
+  id        String        @id @default(uuid())
+  userId    String
+  courseId  String
+  status    RequestStatus @default(PENDING)
+  createdAt DateTime      @default(now())
+
+  user   User   @relation(fields: [userId], references: [id])
+  course Course @relation(fields: [courseId], references: [id])
+}
+
+enum RequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model CourseReview {
+  id        String   @id @default(uuid())
+  userId    String
+  courseId  String
+  rating    Int
+  comment   String?
+  createdAt DateTime @default(now())
+
+  user   User   @relation(fields: [userId], references: [id])
+  course Course @relation(fields: [courseId], references: [id])
+
+  @@unique([userId, courseId])
 }

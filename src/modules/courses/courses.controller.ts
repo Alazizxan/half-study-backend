@@ -16,7 +16,7 @@ import { CreateCourseDto } from './dto/create-course.dto';
 
 @Controller('api/v1/courses')
 export class CoursesController {
-  constructor(private courses: CoursesService) {}
+  constructor(private courses: CoursesService) { }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Post()
@@ -35,6 +35,15 @@ export class CoursesController {
   @Get(':slug')
   get(@Param('slug') slug: string) {
     return this.courses.getBySlug(slug);
+  }
+
+  @Post(':id/enroll')
+  @UseGuards(JwtAuthGuard)
+  enroll(
+    @Param('id') courseId: string,
+    @CurrentUser() user: any,
+  ) {
+    return this.courses.enroll(user.sub, courseId);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)

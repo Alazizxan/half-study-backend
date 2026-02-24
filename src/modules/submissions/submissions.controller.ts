@@ -6,13 +6,17 @@ import { CurrentUser } from 'src/common/decorators/current-user.decorator';
 import { Body, Post, Get, Patch, Param } from '@nestjs/common';
 import { Roles } from 'src/common/decorators/roles.decorator';
 import { ForbiddenException } from '@nestjs/common';
-import { Role } from '@prisma/client';
+import { SubmissionStatus, Role } from '@prisma/client';
 import { Query } from '@nestjs/common';
+import { PrismaService } from 'src/prisma/prisma.service';
+
 
 @Controller('api/v1/submissions')
 @UseGuards(JwtAuthGuard)
 export class SubmissionsController {
-  constructor(private submissions: SubmissionsService) { }
+  constructor(private submissions: SubmissionsService,
+    private prisma: PrismaService,
+  ) { }
 
   @Post()
   create(
@@ -39,7 +43,7 @@ export class SubmissionsController {
   @Roles(Role.MODERATOR, Role.ADMIN)
   bulk(
     @CurrentUser() actor: any,
-    @Body() body: { ids: string[]; status: string },
+    @Body() body: { ids: string[]; status: SubmissionStatus },
   ) {
     return this.submissions.bulkReview(actor, body.ids, body.status);
   }
