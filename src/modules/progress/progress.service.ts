@@ -1,0 +1,108 @@
+import { Injectable, ForbiddenException } from '@nestjs/common';
+import { PrismaService } from '../../prisma/prisma.service';
+
+@Injectable()
+export class ProgressService {
+  constructor(private prisma: PrismaService) { }
+
+  async completeLesson(userId: string, lessonId: string) {
+    return this.prisma.$transaction(async (tx) => {
+      // 1️⃣ Lesson mavjudmi
+      const lesson = await tx.lesson.findUnique({
+        where: { id: lessonId },
+      });
+      if (!lesson || !lesson.isPublished)
+        throw new ForbiddenException('Lesson not available');
+
+
+      const enrollment = await tx.enrollment.findUnique({
+        where: {
+          userId_courseId: {
+            userId,
+            courseId: lesson.courseId,
+          },
+        },
+      });
+
+      if (!enrollment)
+        throw new ForbiddenException('Not enrolled');
+
+      
+      // 2️⃣ Idempotent check
+      const existing = await tx.lessonProgress.findUnique({
+        where: {
+          userId_lessonId: { userId, lessonId },
+        },
+      });
+
+      if (existing?.completed) {
+        return { message: 'Already completed' };
+      }
+
+      // 3️⃣ Sequential unlock check
+      const previousLesson = await tx.lesson.findFirst({
+        where: {
+          courseId: lesson.courseId,
+          order: lesson.order - 1,
+        },
+      });
+
+      if (previousLesson) {
+        const prevProgress = await tx.lessonProgress.findUnique({
+          where: {
+            userId_lessonId: {
+              userId,
+              lessonId: previousLesson.id,
+            },
+          },
+        });
+
+        if (!prevProgress?.completed)
+          throw new ForbiddenException(
+            'Previous lesson not completed',
+          );
+      }
+
+      // 4️⃣ Progress create/update
+      await tx.lessonProgress.upsert({
+        where: {
+          userId_lessonId: { userId, lessonId },
+        },
+        create: {
+          userId,
+          lessonId,
+          completed: true,
+        },
+        update: { completed: true },
+      });
+
+      // 5️⃣ Reward XP + Coins
+      const xpReward = 50;
+      const coinReward = 10;
+
+      await tx.xpEvent.create({
+        data: {
+          userId,
+          amount: xpReward,
+          reason: 'LESSON_COMPLETION',
+          lessonId,
+        },
+      });
+
+      await tx.coinEvent.create({
+        data: {
+          userId,
+          amount: coinReward,
+          reason: 'LESSON_COMPLETION',
+          lessonId,
+        },
+      });
+
+      return {
+        message: 'Lesson completed',
+        xpReward,
+        coinReward,
+      };
+    });
+  }
+}

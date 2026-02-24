@@ -1,0 +1,274 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  STUDENT
+  MODERATOR
+  ADMIN
+}
+
+enum AuditAction {
+  ROLE_CHANGE
+  USER_BAN
+  USER_UNBAN
+  PAYMENT_APPROVE
+  COIN_TRANSFER
+  SUBMISSION_OVERRIDE
+}
+
+model User {
+  id           String           @id @default(uuid())
+  email        String           @unique
+  username     String           @unique
+  passwordHash String
+  displayName  String
+  phone        String?
+  avatar       String?
+  bio          String?
+  role         Role             @default(STUDENT)
+  xpEvents     XpEvent[]
+  coinEvents   CoinEvent[]
+  wallet       Wallet?
+  progress     LessonProgress[]
+  submissions  Submission[]
+  enrollments  Enrollment[]
+  notifications Notification[]
+
+  isEmailVerified Boolean   @default(false)
+  failedAttempts  Int       @default(0)
+  lockedUntil     DateTime?
+
+  refreshToken String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  auditLogs AuditLog[]
+}
+
+model AuditLog {
+  id       String      @id @default(uuid())
+  action   AuditAction
+  actorId  String
+  targetId String?
+  meta     Json?
+
+  createdAt DateTime @default(now())
+
+  actor User @relation(fields: [actorId], references: [id])
+}
+
+enum Difficulty {
+  BEGINNER
+  INTERMEDIATE
+  ADVANCED
+}
+
+enum PriceType {
+  FREE
+  COINS
+  PAID
+}
+
+model Category {
+  id   String @id @default(uuid())
+  name String @unique
+  slug String @unique
+
+  courses Course[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Course {
+  id          String     @id @default(uuid())
+  title       String
+  slug        String     @unique
+  description String
+  coverImage  String?
+  difficulty  Difficulty
+  priceType   PriceType  @default(FREE)
+  coinPrice   Int?
+  moneyPrice  Float?
+  isPublished Boolean    @default(false)
+
+  categoryId String
+  category   Category @relation(fields: [categoryId], references: [id])
+
+  lessons Lesson[]
+  enrollments Enrollment[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([categoryId])
+}
+
+model Lesson {
+  id           String @id @default(uuid())
+  title        String
+  content      String
+  order        Int
+  estimatedMin Int?
+
+  courseId String
+  course   Course @relation(fields: [courseId], references: [id])
+
+  isPublished Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  progresses  LessonProgress[]
+  assignments Assignment[]
+
+  @@unique([courseId, order])
+  @@index([courseId])
+}
+
+model XpEvent {
+  id       String  @id @default(uuid())
+  userId   String
+  amount   Int
+  reason   String
+  lessonId String?
+
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+}
+
+model CoinEvent {
+  id       String     @id @default(uuid())
+  userId   String
+  amount   Int
+  reason   CoinReason
+  lessonId String?
+
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+}
+
+model LessonProgress {
+  id        String  @id @default(uuid())
+  userId    String
+  lessonId  String
+  completed Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user   User   @relation(fields: [userId], references: [id])
+  lesson Lesson @relation(fields: [lessonId], references: [id])
+
+  @@unique([userId, lessonId])
+}
+
+model Wallet {
+  id        String   @id @default(uuid())
+  userId    String   @unique
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+}
+
+enum CoinReason {
+  LESSON_COMPLETION
+  TRANSFER_IN
+  TRANSFER_OUT
+}
+
+enum SubmissionStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  NEEDS_REVISION
+  AI_GRADED
+}
+
+model Assignment {
+  id          String @id @default(uuid())
+  title       String
+  description String
+  maxScore    Int    @default(100)
+
+  lessonId String
+  lesson   Lesson @relation(fields: [lessonId], references: [id])
+
+  submissions Submission[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Submission {
+  id           String @id @default(uuid())
+  userId       String
+  assignmentId String
+
+  textAnswer String?
+  fileKey    String?
+
+  score    Int?
+  feedback String?
+  status   SubmissionStatus @default(PENDING)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user       User       @relation(fields: [userId], references: [id])
+  assignment Assignment @relation(fields: [assignmentId], references: [id])
+
+  @@index([userId])
+  @@index([assignmentId])
+}
+
+
+model Enrollment {
+  id        String   @id @default(uuid())
+  userId    String
+  courseId  String
+
+  createdAt DateTime @default(now())
+
+  user   User   @relation(fields: [userId], references: [id])
+  course Course @relation(fields: [courseId], references: [id])
+
+  @@unique([userId, courseId])
+  @@index([courseId])
+}
+
+
+enum NotificationType {
+  SYSTEM
+  NEWS
+  AD
+  COURSE_UPDATE
+}
+
+model Notification {
+  id        String            @id @default(uuid())
+  userId    String?
+  type      NotificationType
+  title     String
+  body      String
+  link      String?
+  isRead    Boolean           @default(false)
+
+  createdAt DateTime          @default(now())
+
+  user User? @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([createdAt])
+}

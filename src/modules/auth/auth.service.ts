@@ -1,0 +1,66 @@
+import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { PrismaService } from '../../prisma/prisma.service';
+import * as argon2 from 'argon2';
+import { JwtService } from '@nestjs/jwt';
+
+interface JwtPayload {
+  sub: string;
+  role: string;
+}
+
+@Injectable()
+export class AuthService {
+  constructor(
+    private prisma: PrismaService,
+    private jwt: JwtService,
+  ) { }
+
+  async register(dto: any) {
+    const hash = await argon2.hash(dto.password);
+
+    return this.prisma.user.create({
+      data: {
+        email: dto.email,
+        username: dto.username,
+        displayName: dto.displayName ?? dto.username,
+        passwordHash: hash,
+      },
+    });
+  }
+
+  async validateUser(email: string, password: string) {
+    const user = await this.prisma.user.findUnique({ where: { email } });
+    if (!user) throw new UnauthorizedException();
+
+    const valid = await argon2.verify(user.passwordHash, password);
+    if (!valid) throw new UnauthorizedException();
+
+    return user;
+  }
+
+  async login(user: any) {
+    const payload: JwtPayload = {
+      sub: user.id,
+      role: user.role,
+    };
+
+    const access = this.jwt.sign(payload, {
+      secret: process.env.JWT_ACCESS_SECRET as string,
+      expiresIn: process.env.JWT_ACCESS_EXPIRES as any,
+    });
+
+    const refresh = this.jwt.sign(payload, {
+      secret: process.env.JWT_REFRESH_SECRET as string,
+      expiresIn: process.env.JWT_REFRESH_EXPIRES as any,
+    });
+
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: {
+        refreshToken: await argon2.hash(refresh),
+      },
+    });
+
+    return { access, refresh };
+  }
+}
