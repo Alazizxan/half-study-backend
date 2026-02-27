@@ -33,8 +33,12 @@ export class CoursesController {
   }
 
   @Get(':slug')
-  get(@Param('slug') slug: string) {
-    return this.courses.getBySlug(slug);
+  @UseGuards(JwtAuthGuard)
+  get(
+    @Param('slug') slug: string,
+    @CurrentUser() user: any,
+  ) {
+    return this.courses.getBySlug(slug, user.sub);
   }
 
   @Post(':id/enroll')

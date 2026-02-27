@@ -32,6 +32,8 @@ model User {
   avatar           String?
   bio              String?
   role             Role                    @default(STUDENT)
+  xp        Int @default(0)
+  level     Int @default(1)
   xpEvents         XpEvent[]
   coinEvents       CoinEvent[]
   wallet           Wallet?
@@ -41,6 +43,13 @@ model User {
   notifications    Notification[]
   purchaseRequests CoursePurchaseRequest[]
   courseReviews    CourseReview[]
+  currentStreak    Int       @default(0)
+  longestStreak    Int       @default(0)
+  lastLoginAt      DateTime?
+
+  achievements UserAchievement[]
+
+  
 
   isEmailVerified Boolean   @default(false)
   failedAttempts  Int       @default(0)
@@ -306,4 +315,37 @@ model CourseReview {
   course Course @relation(fields: [courseId], references: [id])
 
   @@unique([userId, courseId])
+}
+
+model Achievement {
+  id          String   @id @default(uuid())
+  title       String
+  description String
+  rarity      AchievementRarity
+  icon        String?
+  xpReward    Int      @default(0)
+
+  users       UserAchievement[]
+
+  createdAt   DateTime @default(now())
+}
+
+model UserAchievement {
+  id            String   @id @default(uuid())
+  userId        String
+  achievementId String
+  unlockedAt    DateTime @default(now())
+
+  user        User        @relation(fields: [userId], references: [id])
+  achievement Achievement @relation(fields: [achievementId], references: [id])
+
+  @@unique([userId, achievementId])
+}
+
+
+enum AchievementRarity {
+  COMMON
+  RARE
+  EPIC
+  LEGENDARY
 }

@@ -17,7 +17,7 @@ import { UpdateProfileDto } from './dto/update-profile.dto';
 @Controller('api/v1/users')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class UsersController {
-  constructor(private users: UsersService) {}
+  constructor(private users: UsersService) { }
 
   @Get('me')
   getMe(@CurrentUser() user: any) {
@@ -52,5 +52,21 @@ export class UsersController {
   @Roles(Role.ADMIN)
   unban(@CurrentUser() actor: any, @Param('id') id: string) {
     return this.users.unbanUser(actor, id);
+  }
+
+  @Get('me/stats')
+  getStats(@CurrentUser() user: any) {
+    return this.users.getStats(user.sub);
+  }
+
+
+  @Get('me/achievements')
+  getAchievements(@CurrentUser() user: any) {
+    return this.users.getAchievements(user.sub);
+  }
+
+  @Get('me/courses')
+  getMyCourses(@CurrentUser() user: any) {
+    return this.users.getMyCourses(user.sub);
   }
 }

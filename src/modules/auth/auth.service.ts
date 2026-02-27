@@ -2,6 +2,7 @@ import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import * as argon2 from 'argon2';
 import { JwtService } from '@nestjs/jwt';
+import { AchievementService } from '../gamification/achievement.service';
 
 interface JwtPayload {
   sub: string;
@@ -13,6 +14,7 @@ export class AuthService {
   constructor(
     private prisma: PrismaService,
     private jwt: JwtService,
+    private achievementService: AchievementService,
   ) { }
 
   async register(dto: any) {
@@ -60,6 +62,58 @@ export class AuthService {
         refreshToken: await argon2.hash(refresh),
       },
     });
+
+    // 🔥 STREAK SYSTEM
+
+    const today = new Date();
+    const yesterday = new Date();
+    yesterday.setDate(today.getDate() - 1);
+
+    const dbUser = await this.prisma.user.findUnique({
+      where: { id: user.id },
+    });
+
+    if (!dbUser) return { access, refresh };
+
+    if (!dbUser.lastLoginAt) {
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: {
+          currentStreak: 1,
+          longestStreak: 1,
+          lastLoginAt: today,
+        },
+      });
+
+      await this.achievementService.unlock(user.id, 'First Login');
+    } else {
+      const last = new Date(dbUser.lastLoginAt);
+
+      if (last.toDateString() === yesterday.toDateString()) {
+        const newStreak = dbUser.currentStreak + 1;
+
+        await this.prisma.user.update({
+          where: { id: user.id },
+          data: {
+            currentStreak: newStreak,
+            longestStreak: Math.max(newStreak, dbUser.longestStreak),
+            lastLoginAt: today,
+          },
+        });
+
+        if (newStreak === 7) {
+          await this.achievementService.unlock(user.id, '7 Day Streak');
+        }
+      } else if (last.toDateString() !== today.toDateString()) {
+        await this.prisma.user.update({
+          where: { id: user.id },
+          data: {
+            currentStreak: 1,
+            lastLoginAt: today,
+          },
+        });
+      }
+    }
 
     return { access, refresh };
   }

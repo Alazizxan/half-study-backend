@@ -1,4 +1,4 @@
-import { Injectable,NotFoundException, ForbiddenException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { Role } from '@prisma/client';
 
@@ -64,9 +64,10 @@ export class CoursesService {
         where: { userId, courseId },
       });
 
-      if (existing)
-        throw new ForbiddenException('Already enrolled');
-
+      if (existing) {
+        // ✅ idempotent: qayta bosilsa ham successdek ishlaydi
+        return existing;
+      }
       // FREE COURSE
       if (course.priceType === 'FREE') {
         return tx.enrollment.create({
@@ -108,8 +109,8 @@ export class CoursesService {
     });
   }
 
-  async getBySlug(slug: string) {
-    return this.prisma.course.findUnique({
+  async getBySlug(slug: string, userId: string) {
+    const course = await this.prisma.course.findUnique({
       where: { slug },
       include: {
         lessons: {
@@ -118,6 +119,104 @@ export class CoursesService {
         },
         category: true,
       },
+    });
+
+    if (!course || !course.isPublished)
+      throw new NotFoundException('Course not found');
+
+    // Enrollment check
+    const enrollment = await this.prisma.enrollment.findUnique({
+      where: {
+        userId_courseId: {
+          userId,
+          courseId: course.id,
+        },
+      },
+    });
+
+    // Agar enroll bo‘lmagan bo‘lsa – unlock va progress hisoblamaymiz
+    if (!enrollment) {
+      return {
+        ...course,
+        isEnrolled: false,
+        lessons: course.lessons.map((lesson, index) => ({
+          ...lesson,
+          completed: false,
+          isUnlocked: false,
+        })),
+      };
+    }
+
+    // Progresslarni olamiz
+    const progressList = await this.prisma.lessonProgress.findMany({
+      where: {
+        userId,
+        lesson: {
+          courseId: course.id,
+        },
+      },
+    });
+
+    const progressMap = new Map(
+      progressList.map(p => [p.lessonId, p.completed])
+    );
+
+    // Lessonsni enrich qilamiz
+    const enrichedLessons = course.lessons.map((lesson, index) => {
+      const completed = !!progressMap.get(lesson.id);
+
+      let isUnlocked = false;
+
+      if (index === 0) {
+        isUnlocked = true;
+      } else {
+        const prevLesson = course.lessons[index - 1];
+        isUnlocked = !!progressMap.get(prevLesson.id);
+      }
+
+      return {
+        ...lesson,
+        completed,
+        isUnlocked,
+      };
+    });
+
+    return {
+      ...course,
+      lessons: enrichedLessons,
+      isEnrolled: true,
+    };
+  }
+
+  async getAnalytics(courseId: string) {
+    const [enrollments, reviews] = await Promise.all([
+      this.prisma.enrollment.count({ where: { courseId } }),
+      this.prisma.courseReview.aggregate({
+        where: { courseId },
+        _avg: { rating: true },
+        _count: true,
+      }),
+    ]);
+
+    return {
+      totalStudents: enrollments,
+      avgRating: reviews._avg.rating || 0,
+      totalReviews: reviews._count,
+    };
+  }
+
+  async review(userId: string, courseId: string, dto: any) {
+    return this.prisma.courseReview.upsert({
+      where: { userId_courseId: { userId, courseId } },
+      update: dto,
+      create: { userId, courseId, ...dto },
+    });
+  }
+
+  async getReviews(courseId: string) {
+    return this.prisma.courseReview.findMany({
+      where: { courseId },
+      include: { user: true },
     });
   }
 }

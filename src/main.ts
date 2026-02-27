@@ -1,28 +1,27 @@
-import { NestFactory } from '@nestjs/core';
-import { AppModule } from './app.module';
-import helmet from 'helmet';
 import { ValidationPipe } from '@nestjs/common';
+import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import cookieParser from 'cookie-parser';
+import helmet from 'helmet';
+import { AppModule } from './app.module';
 import { ResponseInterceptor } from './common/interceptors/response.interceptor';
 import './modules/grading/grading.worker';
 import './modules/notifications/notifications.worker';
-import { ThrottlerGuard } from '@nestjs/throttler';
-
-
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
+  // ✅ Disable ETag (important for cookie-based auth + SPA)
+  app.getHttpAdapter().getInstance().set('etag', false);
+
   app.use(helmet());
+
   app.enableCors({
     origin: process.env.CORS_ORIGIN,
     credentials: true,
   });
 
   app.use(cookieParser());
-
-  
 
   app.useGlobalPipes(
     new ValidationPipe({

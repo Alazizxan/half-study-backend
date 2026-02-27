@@ -1,9 +1,17 @@
 import { Injectable, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { XpService } from '../gamification/xp.service';
+import { AchievementService } from '../gamification/achievement.service';
+
+
 
 @Injectable()
 export class ProgressService {
-  constructor(private prisma: PrismaService) { }
+  constructor(
+    private prisma: PrismaService,
+    private xpService: XpService,
+    private achievementService: AchievementService,
+  ) { }
 
   async completeLesson(userId: string, lessonId: string) {
     return this.prisma.$transaction(async (tx) => {
@@ -27,7 +35,7 @@ export class ProgressService {
       if (!enrollment)
         throw new ForbiddenException('Not enrolled');
 
-      
+
       // 2️⃣ Idempotent check
       const existing = await tx.lessonProgress.findUnique({
         where: {
@@ -88,6 +96,35 @@ export class ProgressService {
           lessonId,
         },
       });
+
+      // 🔥 UPDATE USER XP + LEVEL
+      await this.xpService.addXp(userId, xpReward);
+
+      // 🔥 FIRST LESSON ACHIEVEMENT
+      await this.achievementService.unlock(userId, 'First Lesson');
+
+      const totalLessons = await tx.lesson.count({
+        where: { courseId: lesson.courseId, isPublished: true },
+      });
+
+      const completedLessons = await tx.lessonProgress.count({
+        where: {
+          userId,
+          completed: true,
+          lesson: {
+            courseId: lesson.courseId,
+          },
+        },
+      });
+
+      if (completedLessons === totalLessons) {
+        await this.achievementService.unlock(
+          userId,
+          'First Course Complete',
+        );
+
+        await this.xpService.addXp(userId, 300);
+      }
 
       await tx.coinEvent.create({
         data: {

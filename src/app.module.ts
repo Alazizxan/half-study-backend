@@ -17,6 +17,9 @@ import { EnrollmentModule } from './modules/enrollment/enrollment.module';
 import { UploadModule } from './modules/upload/upload.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { AdminModule } from './modules/admin/admin.module';
+import { GamificationModule } from './modules/gamification/gamification.module';
+
+
 
 @Module({
   imports: [
@@ -34,7 +37,9 @@ import { AdminModule } from './modules/admin/admin.module';
     EnrollmentModule,
     UploadModule,
     NotificationsModule,
-    
+    AdminModule,
+    GamificationModule,
+
 
     LoggerModule.forRoot({
       pinoHttp: {
