@@ -1,6 +1,6 @@
 import { Injectable, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
-import { Role } from '@prisma/client';
+import { CoinReason, Role } from '@prisma/client';
 
 @Injectable()
 export class UsersService {
@@ -15,6 +15,7 @@ export class UsersService {
         username: true,
         displayName: true,
         bio: true,
+        referralCode: true,
         role: true,
         createdAt: true,
       },
@@ -154,4 +155,52 @@ export class UsersService {
     );
   }
 
+  async searchUsers(q: string) {
+
+    if (!q || q.length < 2) return [];
+
+    return this.prisma.user.findMany({
+      where: {
+        OR: [
+          { username: { contains: q, mode: "insensitive" } },
+          { email: { contains: q, mode: "insensitive" } },
+          { displayName: { contains: q, mode: "insensitive" } }
+        ]
+      },
+      select: {
+        id: true,
+        username: true,
+        displayName: true,
+        email: true
+      },
+      take: 10
+    });
+
+  }
+
+  async getReferralStats(userId: string) {
+
+    const count = await this.prisma.user.count({
+      where: {
+        referredById: userId
+      }
+    })
+
+    const coins = await this.prisma.coinEvent.aggregate({
+      where: {
+        userId,
+        reason: CoinReason.REFERRAL
+      },
+      _sum: { amount: true }
+    })
+
+    return {
+      referrals: count,
+      coinsEarned: coins?._sum?.amount ?? 0
+    }
+
+  }
+
 }
+
+

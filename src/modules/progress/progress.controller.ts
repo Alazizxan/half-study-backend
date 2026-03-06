@@ -1,6 +1,7 @@
 import {
   Controller,
   Post,
+  Get,
   Param,
   UseGuards,
 } from '@nestjs/common';
@@ -18,9 +19,15 @@ export class ProgressController {
     @CurrentUser() user: any,
     @Param('lessonId') lessonId: string,
   ) {
-    return this.progress.completeLesson(
-      user.sub,
-      lessonId,
-    );
+    return this.progress.completeLesson(user.sub, lessonId);
+  }
+
+  // ✅ NEW: Kurs progress (slug bo'yicha)
+  @Get('course/:slug')
+  courseProgress(
+    @CurrentUser() user: any,
+    @Param('slug') slug: string,
+  ) {
+    return this.progress.getCourseProgress(user.sub, slug);
   }
 }

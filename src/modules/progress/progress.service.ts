@@ -1,9 +1,7 @@
-import { Injectable, ForbiddenException } from '@nestjs/common';
+import { Injectable, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { XpService } from '../gamification/xp.service';
 import { AchievementService } from '../gamification/achievement.service';
-
-
 
 @Injectable()
 export class ProgressService {
@@ -11,7 +9,7 @@ export class ProgressService {
     private prisma: PrismaService,
     private xpService: XpService,
     private achievementService: AchievementService,
-  ) { }
+  ) {}
 
   async completeLesson(userId: string, lessonId: string) {
     return this.prisma.$transaction(async (tx) => {
@@ -21,7 +19,6 @@ export class ProgressService {
       });
       if (!lesson || !lesson.isPublished)
         throw new ForbiddenException('Lesson not available');
-
 
       const enrollment = await tx.enrollment.findUnique({
         where: {
@@ -34,7 +31,6 @@ export class ProgressService {
 
       if (!enrollment)
         throw new ForbiddenException('Not enrolled');
-
 
       // 2️⃣ Idempotent check
       const existing = await tx.lessonProgress.findUnique({
@@ -66,9 +62,7 @@ export class ProgressService {
         });
 
         if (!prevProgress?.completed)
-          throw new ForbiddenException(
-            'Previous lesson not completed',
-          );
+          throw new ForbiddenException('Previous lesson not completed');
       }
 
       // 4️⃣ Progress create/update
@@ -118,11 +112,7 @@ export class ProgressService {
       });
 
       if (completedLessons === totalLessons) {
-        await this.achievementService.unlock(
-          userId,
-          'First Course Complete',
-        );
-
+        await this.achievementService.unlock(userId, 'First Course Complete');
         await this.xpService.addXp(userId, 300);
       }
 
@@ -141,5 +131,79 @@ export class ProgressService {
         coinReward,
       };
     });
+  }
+
+  // ✅ NEW: GET /api/v1/progress/course/:slug
+  async getCourseProgress(userId: string, slug: string) {
+    const course = await this.prisma.course.findUnique({
+      where: { slug },
+      select: { id: true, isPublished: true },
+    });
+
+    if (!course || !course.isPublished)
+      throw new NotFoundException('Course not found');
+
+    const enrollment = await this.prisma.enrollment.findUnique({
+      where: { userId_courseId: { userId, courseId: course.id } },
+    });
+
+    if (!enrollment) {
+      return {
+        percent: 0,
+        completedLessons: 0,
+        totalLessons: 0,
+        nextLessonId: null,
+      };
+    }
+
+    const lessons = await this.prisma.lesson.findMany({
+      where: { courseId: course.id, isPublished: true },
+      orderBy: { order: 'asc' },
+      select: { id: true },
+    });
+
+    const totalLessons = lessons.length;
+
+    const progresses = await this.prisma.lessonProgress.findMany({
+      where: { userId, lesson: { courseId: course.id } },
+      select: { lessonId: true, completed: true },
+    });
+
+    const completedSet = new Set(
+      progresses.filter((p) => p.completed).map((p) => p.lessonId),
+    );
+
+    const completedLessons = completedSet.size;
+
+    const percent =
+      totalLessons > 0
+        ? Math.round((completedLessons / totalLessons) * 100)
+        : 0;
+
+    let nextLessonId: string | null = null;
+    for (let i = 0; i < lessons.length; i++) {
+      const id = lessons[i].id;
+      const done = completedSet.has(id);
+
+      if (i === 0) {
+        if (!done) {
+          nextLessonId = id;
+          break;
+        }
+      } else {
+        const prevId = lessons[i - 1].id;
+        if (completedSet.has(prevId) && !done) {
+          nextLessonId = id;
+          break;
+        }
+      }
+    }
+
+    return {
+      percent,
+      completedLessons,
+      totalLessons,
+      nextLessonId,
+    };
   }
 }

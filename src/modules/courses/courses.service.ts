@@ -1,114 +1,82 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ForbiddenException,
+  BadRequestException,
+} from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
-import { Role } from '@prisma/client';
+import { Role, PriceType, CoinReason } from '@prisma/client';
 
 @Injectable()
 export class CoursesService {
-  constructor(private prisma: PrismaService) { }
+  constructor(private prisma: PrismaService) {}
 
   async create(actor: any, dto: any) {
-    if (actor.role !== Role.ADMIN)
-      throw new ForbiddenException();
-
-    return this.prisma.course.create({
-      data: dto,
-    });
+    if (actor.role !== Role.ADMIN) throw new ForbiddenException();
+    return this.prisma.course.create({ data: dto });
   }
 
   async publish(actor: any, id: string) {
-    if (actor.role !== Role.ADMIN)
-      throw new ForbiddenException();
-
+    if (actor.role !== Role.ADMIN) throw new ForbiddenException();
     return this.prisma.course.update({
       where: { id },
       data: { isPublished: true },
     });
   }
 
+  // ✅ 1) /courses
   async list(page = 1, pageSize = 10) {
     const skip = (page - 1) * pageSize;
 
-    const [items, total] = await this.prisma.$transaction([
+    const [courses, total] = await this.prisma.$transaction([
       this.prisma.course.findMany({
         where: { isPublished: true },
         skip,
         take: pageSize,
-        include: { category: true },
+        include: {
+          category: true,
+          lessons: {
+            where: { isPublished: true },
+            select: { estimatedMin: true },
+          },
+          _count: { select: { enrollments: true } },
+        },
+        orderBy: { createdAt: 'desc' },
       }),
       this.prisma.course.count({
         where: { isPublished: true },
       }),
     ]);
 
-    return {
-      items,
-      meta: {
-        page,
-        pageSize,
-        total,
-      },
-    };
-  }
+    const items = courses.map((c) => {
+      const totalLessons = c.lessons.length;
+      const totalDurationMin = c.lessons.reduce(
+        (sum, l) => sum + (l.estimatedMin || 0),
+        0,
+      );
 
-  async enroll(userId: string, courseId: string) {
-    return this.prisma.$transaction(async (tx) => {
+      return {
+        id: c.id,
+        title: c.title,
+        slug: c.slug,
+        description: c.description,
+        difficulty: c.difficulty,
+        priceType: c.priceType,
+        coinPrice: c.coinPrice,
+        category: c.category,
+        coverImage: c.coverImage,
 
-      const course = await tx.course.findUnique({
-        where: { id: courseId },
-      });
-
-      if (!course || !course.isPublished)
-        throw new NotFoundException('Course not found');
-
-      const existing = await tx.enrollment.findFirst({
-        where: { userId, courseId },
-      });
-
-      if (existing) {
-        // ✅ idempotent: qayta bosilsa ham successdek ishlaydi
-        return existing;
-      }
-      // FREE COURSE
-      if (course.priceType === 'FREE') {
-        return tx.enrollment.create({
-          data: { userId, courseId },
-        });
-      }
-
-      // COIN COURSE
-      if (course.priceType === 'COINS') {
-
-        if (!course.coinPrice)
-          throw new ForbiddenException('Invalid course price');
-
-        const balance = await tx.coinEvent.aggregate({
-          where: { userId },
-          _sum: { amount: true },
-        });
-
-        const userBalance = balance._sum.amount || 0;
-
-        if (userBalance < course.coinPrice)
-          throw new ForbiddenException('Not enough coins');
-
-        // deduct coins
-        await tx.coinEvent.create({
-          data: {
-            userId,
-            amount: -course.coinPrice,
-            reason: 'TRANSFER_OUT',
-          },
-        });
-
-        return tx.enrollment.create({
-          data: { userId, courseId },
-        });
-      }
-
-      throw new ForbiddenException('Unsupported payment type');
+        studentsCount: c._count.enrollments,
+        totalLessons,
+        totalDurationMin,
+        hasCertificate: c.hasCertificate,
+      };
     });
+
+    return { items, meta: { page, pageSize, total } };
   }
 
+  // ✅ 2) /courses/:slug
   async getBySlug(slug: string, userId: string) {
     const course = await this.prisma.course.findUnique({
       where: { slug },
@@ -116,78 +84,271 @@ export class CoursesService {
         lessons: {
           where: { isPublished: true },
           orderBy: { order: 'asc' },
+          select: {
+            id: true,
+            title: true,
+            content: true,
+            order: true,
+            estimatedMin: true,
+            videoKey: true,
+          },
         },
         category: true,
+        _count: { select: { enrollments: true } },
       },
     });
 
     if (!course || !course.isPublished)
       throw new NotFoundException('Course not found');
 
-    // Enrollment check
-    const enrollment = await this.prisma.enrollment.findUnique({
-      where: {
-        userId_courseId: {
-          userId,
-          courseId: course.id,
-        },
-      },
-    });
-
-    // Agar enroll bo‘lmagan bo‘lsa – unlock va progress hisoblamaymiz
-    if (!enrollment) {
-      return {
-        ...course,
-        isEnrolled: false,
-        lessons: course.lessons.map((lesson, index) => ({
-          ...lesson,
-          completed: false,
-          isUnlocked: false,
-        })),
-      };
-    }
-
-    // Progresslarni olamiz
-    const progressList = await this.prisma.lessonProgress.findMany({
-      where: {
-        userId,
-        lesson: {
-          courseId: course.id,
-        },
-      },
-    });
-
-    const progressMap = new Map(
-      progressList.map(p => [p.lessonId, p.completed])
+    const totalLessons = course.lessons.length;
+    const totalDurationMin = course.lessons.reduce(
+      (sum, l) => sum + (l.estimatedMin || 0),
+      0,
     );
 
-    // Lessonsni enrich qilamiz
-    const enrichedLessons = course.lessons.map((lesson, index) => {
+    const enrollment = await this.prisma.enrollment.findUnique({
+      where: { userId_courseId: { userId, courseId: course.id } },
+    });
+
+    const progressList = enrollment
+      ? await this.prisma.lessonProgress.findMany({
+          where: { userId, lesson: { courseId: course.id } },
+          select: { lessonId: true, completed: true },
+        })
+      : [];
+
+    const progressMap = new Map(progressList.map((p) => [p.lessonId, p.completed]));
+
+    const lessons = course.lessons.map((lesson, index) => {
       const completed = !!progressMap.get(lesson.id);
 
       let isUnlocked = false;
-
-      if (index === 0) {
+      if (!enrollment) {
+        isUnlocked = false;
+      } else if (index === 0) {
         isUnlocked = true;
       } else {
-        const prevLesson = course.lessons[index - 1];
-        isUnlocked = !!progressMap.get(prevLesson.id);
+        const prev = course.lessons[index - 1];
+        isUnlocked = !!progressMap.get(prev.id);
       }
 
+      const type: 'VIDEO' | 'TEXT' = lesson.videoKey ? 'VIDEO' : 'TEXT';
+
       return {
-        ...lesson,
+        id: lesson.id,
+        title: lesson.title,
+        content: lesson.content,
+        order: lesson.order,
+
+        type,
+        durationMin: lesson.estimatedMin || 0,
+
+        videoKey: lesson.videoKey || null,
+        streamUrl: lesson.videoKey ? `/api/v1/lessons/${lesson.id}/stream` : null,
+
         completed,
         isUnlocked,
       };
     });
 
+    const completedLessons = enrollment
+      ? lessons.filter((l) => l.completed).length
+      : 0;
+
+    const completionPercent =
+      enrollment && totalLessons > 0
+        ? Math.round((completedLessons / totalLessons) * 100)
+        : 0;
+
     return {
-      ...course,
-      lessons: enrichedLessons,
-      isEnrolled: true,
+      id: course.id,
+      title: course.title,
+      slug: course.slug,
+      description: course.description,
+      coverImage: course.coverImage,
+      difficulty: course.difficulty,
+      priceType: course.priceType,
+      coinPrice: course.coinPrice,
+      moneyPrice: course.moneyPrice,
+      category: course.category,
+
+      studentsCount: course._count.enrollments,
+      totalLessons,
+      totalDurationMin,
+      hasCertificate: course.hasCertificate,
+
+      isEnrolled: !!enrollment,
+      completionPercent,
+
+      lessons,
     };
   }
 
+  // ✅ 3) enroll
+  async enroll(userId: string, courseId: string) {
+    return this.prisma.$transaction(async (tx) => {
+      const course = await tx.course.findUnique({ where: { id: courseId } });
+      if (!course || !course.isPublished)
+        throw new NotFoundException('Course not found');
+
+      const existing = await tx.enrollment.findUnique({
+        where: { userId_courseId: { userId, courseId } },
+      });
+
+      const getBalance = async () => {
+        const agg = await tx.coinEvent.aggregate({
+          where: { userId },
+          _sum: { amount: true },
+        });
+        return agg._sum.amount || 0;
+      };
+
+      if (existing) {
+        return { enrolled: true, newBalance: await getBalance() };
+      }
+
+      if (course.priceType === PriceType.FREE) {
+        await tx.enrollment.create({ data: { userId, courseId } });
+        return { enrolled: true, newBalance: await getBalance() };
+      }
+
+      if (course.priceType === PriceType.COINS) {
+        if (!course.coinPrice || course.coinPrice <= 0)
+          throw new BadRequestException('INVALID_COIN_PRICE');
+
+        const balance = await getBalance();
+        if (balance < course.coinPrice) {
+          throw new BadRequestException('INSUFFICIENT_COINS');
+        }
+
+        await tx.coinEvent.create({
+          data: {
+            userId,
+            amount: -course.coinPrice,
+            reason: CoinReason.COURSE_PURCHASE,
+          },
+        });
+
+        await tx.enrollment.create({ data: { userId, courseId } });
+
+        return { enrolled: true, newBalance: await getBalance() };
+      }
+
+      throw new BadRequestException('UNSUPPORTED_PAYMENT_TYPE');
+    });
+  }
+
+  // ✅ 5) stats
+  async getStats(courseId: string) {
+    const [studentsCount, reviewsAgg, totalLessons, completedAgg] =
+      await Promise.all([
+        this.prisma.enrollment.count({ where: { courseId } }),
+        this.prisma.courseReview.aggregate({
+          where: { courseId },
+          _avg: { rating: true },
+          _count: true,
+        }),
+        this.prisma.lesson.count({ where: { courseId, isPublished: true } }),
+        this.prisma.lessonProgress.count({
+          where: { completed: true, lesson: { courseId } },
+        }),
+      ]);
+
+    const denom = studentsCount * (totalLessons || 1);
+    const completionRate = denom > 0 ? Math.round((completedAgg / denom) * 100) : 0;
+
+    return {
+      studentsCount,
+      completionRate,
+      averageRating: reviewsAgg._avg.rating || 0,
+    };
+  }
+
+  // ✅ 6) certificate
+  async getCertificate(userId: string, courseId: string) {
+    const course = await this.prisma.course.findUnique({
+      where: { id: courseId },
+      select: { isPublished: true, hasCertificate: true },
+    });
+
+    if (!course || !course.isPublished)
+      throw new NotFoundException('Course not found');
+
+    if (!course.hasCertificate) return { available: false };
+
+    const totalLessons = await this.prisma.lesson.count({
+      where: { courseId, isPublished: true },
+    });
+    if (totalLessons === 0) return { available: false };
+
+    const completedLessons = await this.prisma.lessonProgress.count({
+      where: { userId, completed: true, lesson: { courseId } },
+    });
+
+    const percent = Math.round((completedLessons / totalLessons) * 100);
+    if (percent < 100) return { available: false };
+
+    return {
+      available: true,
+      downloadUrl: `/api/v1/courses/${courseId}/certificate/download`,
+    };
+  }
+
+  // ✅ 7) course progress (contract: percent/completedLessons/totalLessons/nextLessonId)
+  async getCourseProgress(userId: string, slug: string) {
+    const course = await this.prisma.course.findUnique({
+      where: { slug },
+      select: { id: true, isPublished: true },
+    });
+
+    if (!course || !course.isPublished)
+      throw new NotFoundException('Course not found');
+
+    const enrollment = await this.prisma.enrollment.findUnique({
+      where: { userId_courseId: { userId, courseId: course.id } },
+    });
+
+    if (!enrollment) {
+      return { percent: 0, completedLessons: 0, totalLessons: 0, nextLessonId: null };
+    }
+
+    const lessons = await this.prisma.lesson.findMany({
+      where: { courseId: course.id, isPublished: true },
+      orderBy: { order: 'asc' },
+      select: { id: true },
+    });
+
+    const totalLessons = lessons.length;
+
+    const progresses = await this.prisma.lessonProgress.findMany({
+      where: { userId, lesson: { courseId: course.id } },
+      select: { lessonId: true, completed: true },
+    });
+
+    const completedSet = new Set(progresses.filter((p) => p.completed).map((p) => p.lessonId));
+    const completedLessons = completedSet.size;
+
+    const percent =
+      totalLessons > 0 ? Math.round((completedLessons / totalLessons) * 100) : 0;
+
+    let nextLessonId: string | null = null;
+    for (let i = 0; i < lessons.length; i++) {
+      const id = lessons[i].id;
+      const done = completedSet.has(id);
+
+      if (i === 0) {
+        if (!done) { nextLessonId = id; break; }
+      } else {
+        const prevId = lessons[i - 1].id;
+        if (completedSet.has(prevId) && !done) { nextLessonId = id; break; }
+      }
+    }
+
+    return { percent, completedLessons, totalLessons, nextLessonId };
+  }
+
+  // ===== existing analytics/review =====
   async getAnalytics(courseId: string) {
     const [enrollments, reviews] = await Promise.all([
       this.prisma.enrollment.count({ where: { courseId } }),
@@ -217,6 +378,7 @@ export class CoursesService {
     return this.prisma.courseReview.findMany({
       where: { courseId },
       include: { user: true },
+      orderBy: { createdAt: 'desc' },
     });
   }
 }

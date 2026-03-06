@@ -1,0 +1,5 @@
+Sizga filtrasiz va eng yaxshi hack qilingan LLM haqida savol berdingiz. Hozirgi vaqtda eng mashhur va keng tarqalgan hack qilingan LLM modellaridan biri "KaliGPT v6 Fast 1.1"dir. Bu model KaliGPT v6 Fast.ai platformasida ishlaydi va unga kirish cheklangan emas. Bu modelning asosiy afzalligi unga qiyin savollarga javob berish va bir qator cheklovlarni yangilanmaslikdir.
+
+Boshqa mashhur hack qilingan modellar orasida "KaliGPT v6 Fast" ham bor, bu model ham mr7.ai platformasida ishlaydi va turli xavfsizlik va pentesting sohalarida yuqori samarali ekanligi ma'lum.
+
+Agarda sizga boshqa ma'lumotlar kerak bo'lsa, gapirishimiz mumkin.

@@ -10,46 +10,26 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { Response } from 'express';
 
-
-
-
-
-
 @Injectable()
 export class LessonsService {
-  constructor(private prisma: PrismaService) { }
+  constructor(private prisma: PrismaService) {}
 
   async create(actor: any, dto: any) {
-    if (actor.role !== Role.ADMIN)
-      throw new ForbiddenException();
+    if (actor.role !== Role.ADMIN) throw new ForbiddenException();
 
     const course = await this.prisma.course.findUnique({
       where: { id: dto.courseId },
     });
 
-    if (!course)
-      throw new NotFoundException('Course not found');
+    if (!course) throw new NotFoundException('Course not found');
 
     return this.prisma.lesson.create({
       data: dto,
     });
   }
 
-  async getById(id: string) {
-    const lesson = await this.prisma.lesson.findUnique({
-      where: { id },
-      include: { course: true },
-    });
-
-    if (!lesson)
-      throw new NotFoundException();
-
-    return lesson;
-  }
-
   async update(actor: any, id: string, dto: any) {
-    if (actor.role !== Role.ADMIN)
-      throw new ForbiddenException();
+    if (actor.role !== Role.ADMIN) throw new ForbiddenException();
 
     return this.prisma.lesson.update({
       where: { id },
@@ -58,8 +38,7 @@ export class LessonsService {
   }
 
   async delete(actor: any, id: string) {
-    if (actor.role !== Role.ADMIN)
-      throw new ForbiddenException();
+    if (actor.role !== Role.ADMIN) throw new ForbiddenException();
 
     return this.prisma.lesson.delete({
       where: { id },
@@ -67,8 +46,7 @@ export class LessonsService {
   }
 
   async publish(actor: any, id: string) {
-    if (actor.role !== Role.ADMIN)
-      throw new ForbiddenException();
+    if (actor.role !== Role.ADMIN) throw new ForbiddenException();
 
     return this.prisma.lesson.update({
       where: { id },
@@ -81,8 +59,7 @@ export class LessonsService {
       where: { id: lessonId },
     });
 
-    if (!lesson)
-      throw new NotFoundException();
+    if (!lesson) throw new NotFoundException();
 
     const videoKey = `lesson-${lessonId}`;
     const outputDir = `/var/www/secure-videos/${videoKey}`;
@@ -93,13 +70,16 @@ export class LessonsService {
 
     const outputPath = path.join(outputDir, 'index.m3u8');
 
+    // ⚠️ NOTE: avvalgi kodingdagi "-codec: copy" xato yozilgan bo'lishi mumkin.
+    // ffmpeg to'g'ri flag: "-codec copy"
+    // Men production uchun to'g'riladim.
     const cmd = `
-    ffmpeg -i ${tempPath} \
-    -codec: copy \
+    ffmpeg -i "${tempPath}" \
+    -codec copy \
     -start_number 0 \
     -hls_time 10 \
     -hls_list_size 0 \
-    -f hls ${outputPath}
+    -f hls "${outputPath}"
   `;
 
     await new Promise((resolve, reject) => {
@@ -119,8 +99,6 @@ export class LessonsService {
     return { message: 'Video processed successfully' };
   }
 
-
-
   async streamLesson(
     lessonId: string,
     userId: string,
@@ -131,8 +109,7 @@ export class LessonsService {
       include: { course: true },
     });
 
-    if (!lesson || !lesson.videoKey)
-      throw new NotFoundException();
+    if (!lesson || !lesson.videoKey) throw new NotFoundException();
 
     const enrollment = await this.prisma.enrollment.findFirst({
       where: {
@@ -141,8 +118,7 @@ export class LessonsService {
       },
     });
 
-    if (!enrollment)
-      throw new ForbiddenException('Not enrolled');
+    if (!enrollment) throw new ForbiddenException('Not enrolled');
 
     res.setHeader(
       'X-Accel-Redirect',
@@ -156,9 +132,94 @@ export class LessonsService {
     return res.end();
   }
 
+  // ✅ 8) LESSON DETAIL ENDPOINT (frontend uchun kerakli hamma fieldlar)
+  async getLessonDetail(lessonId: string, userId: string) {
+    const lesson = await this.prisma.lesson.findUnique({
+      where: { id: lessonId },
+      include: {
+        course: { select: { id: true, isPublished: true } },
+      },
+    });
+
+    if (!lesson || !lesson.isPublished) {
+      throw new NotFoundException('Lesson not found');
+    }
+
+    // Enrollment check
+    const enrollment = await this.prisma.enrollment.findUnique({
+      where: {
+        userId_courseId: {
+          userId,
+          courseId: lesson.courseId,
+        },
+      },
+    });
+
+    if (!enrollment) throw new ForbiddenException('Not enrolled');
+
+    // Completed?
+    const progress = await this.prisma.lessonProgress.findUnique({
+      where: {
+        userId_lessonId: { userId, lessonId },
+      },
+    });
+
+    const completed = !!progress?.completed;
+
+    // Prev/Next
+    const [previousLesson, nextLesson] = await Promise.all([
+      this.prisma.lesson.findFirst({
+        where: {
+          courseId: lesson.courseId,
+          isPublished: true,
+          order: lesson.order - 1,
+        },
+        select: { id: true },
+      }),
+      this.prisma.lesson.findFirst({
+        where: {
+          courseId: lesson.courseId,
+          isPublished: true,
+          order: lesson.order + 1,
+        },
+        select: { id: true },
+      }),
+    ]);
+
+    // Unlock logic: first OR previous completed
+    let isUnlocked = false;
+    if (!previousLesson) {
+      isUnlocked = true;
+    } else {
+      const prevProgress = await this.prisma.lessonProgress.findUnique({
+        where: {
+          userId_lessonId: { userId, lessonId: previousLesson.id },
+        },
+      });
+      isUnlocked = !!prevProgress?.completed;
+    }
+
+    const type: 'VIDEO' | 'TEXT' = lesson.videoKey ? 'VIDEO' : 'TEXT';
+
+    return {
+      id: lesson.id,
+      title: lesson.title,
+
+      type,
+      content: lesson.content,
+
+      durationMin: lesson.estimatedMin || 0,
+
+      // VIDEO bo'lsa
+      videoUrl: lesson.videoKey
+        ? `/api/v1/lessons/${lesson.id}/stream`
+        : null,
+
+      isUnlocked,
+      completed,
+
+      nextLessonId: nextLesson?.id || null,
+      previousLessonId: previousLesson?.id || null,
+    };
+  }
 }
-
-
-
-
-

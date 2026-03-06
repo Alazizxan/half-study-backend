@@ -1,8 +1,13 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, Injectable, UnauthorizedException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import * as argon2 from 'argon2';
 import { JwtService } from '@nestjs/jwt';
 import { AchievementService } from '../gamification/achievement.service';
+import { customAlphabet } from 'nanoid'
+
+const nanoid = customAlphabet('ABCDEFGHJKLMNPQRSTUVWXYZ23456789', 8)
+
+
 
 interface JwtPayload {
   sub: string;
@@ -18,16 +23,58 @@ export class AuthService {
   ) { }
 
   async register(dto: any) {
-    const hash = await argon2.hash(dto.password);
 
-    return this.prisma.user.create({
-      data: {
-        email: dto.email,
-        username: dto.username,
-        displayName: dto.displayName ?? dto.username,
-        passwordHash: hash,
-      },
-    });
+    const hash = await argon2.hash(dto.password)
+
+    let referredById: string | undefined
+
+    if (dto.referralCode) {
+
+      const refUser = await this.prisma.user.findUnique({
+        where: { referralCode: dto.referralCode }
+      })
+
+      if (refUser) {
+        referredById = refUser.id
+      }
+
+    }
+
+    try {
+
+      const user = await this.prisma.user.create({
+        data: {
+          email: dto.email,
+          username: dto.username,
+          displayName: dto.username,
+          passwordHash: hash,
+          referralCode: nanoid(),
+          referredById
+        }
+      })
+
+      if (referredById) {
+
+        await this.prisma.coinEvent.create({
+          data: {
+            userId: referredById,
+            amount: 10,
+            reason: "REFERRAL"
+          }
+        })
+
+      }
+
+      return user
+
+    } catch (e: any) {
+
+      if (e.code === "P2002") {
+        throw new BadRequestException("EMAIL_OR_USERNAME_EXISTS")
+      }
+
+      throw e
+    }
   }
 
   async validateUser(email: string, password: string) {

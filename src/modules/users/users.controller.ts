@@ -1,18 +1,20 @@
 import {
+  Body,
   Controller,
   Get,
-  Patch,
-  Body,
-  UseGuards,
   Param,
+  Patch,
+  Query,
+  UseGuards,
 } from '@nestjs/common';
-import { UsersService } from './users.service';
-import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { Role } from '@prisma/client';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
+import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
-import { Role } from '@prisma/client';
 import { UpdateProfileDto } from './dto/update-profile.dto';
+import { UsersService } from './users.service';
+import { Public } from 'src/common/decorators/public.decorator';
 
 @Controller('api/v1/users')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -59,6 +61,12 @@ export class UsersController {
     return this.users.getStats(user.sub);
   }
 
+  @Get('search')
+  @Public()
+  searchUsers(@Query('q') q: string) {
+    return this.users.searchUsers(q);
+  }
+
 
   @Get('me/achievements')
   getAchievements(@CurrentUser() user: any) {
@@ -68,5 +76,11 @@ export class UsersController {
   @Get('me/courses')
   getMyCourses(@CurrentUser() user: any) {
     return this.users.getMyCourses(user.sub);
+  }
+
+
+  @Get("me/referrals")
+  getReferrals(@CurrentUser() user: any) {
+    return this.users.getReferralStats(user.sub)
   }
 }

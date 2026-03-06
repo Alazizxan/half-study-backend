@@ -32,8 +32,8 @@ model User {
   avatar           String?
   bio              String?
   role             Role                    @default(STUDENT)
-  xp        Int @default(0)
-  level     Int @default(1)
+  xp               Int                     @default(0)
+  level            Int                     @default(1)
   xpEvents         XpEvent[]
   coinEvents       CoinEvent[]
   wallet           Wallet?
@@ -43,13 +43,18 @@ model User {
   notifications    Notification[]
   purchaseRequests CoursePurchaseRequest[]
   courseReviews    CourseReview[]
-  currentStreak    Int       @default(0)
-  longestStreak    Int       @default(0)
+  currentStreak    Int                     @default(0)
+  longestStreak    Int                     @default(0)
   lastLoginAt      DateTime?
 
-  achievements UserAchievement[]
+  referralCode String @unique @default(cuid())
+  referredById String?
 
-  
+  referredBy User?          @relation("Referral", fields: [referredById], references: [id])
+  referrals  User[]         @relation("Referral")
+  promoUses  PromoCodeUse[]
+
+  achievements UserAchievement[]
 
   isEmailVerified Boolean   @default(false)
   failedAttempts  Int       @default(0)
@@ -60,7 +65,10 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  auditLogs AuditLog[]
+  certificates Certificate[]
+
+  auditLogs           AuditLog[]
+  coinPurchaseRequest CoinPurchaseRequest[]
 }
 
 model AuditLog {
@@ -110,6 +118,9 @@ model Course {
   moneyPrice  Float?
   isPublished Boolean    @default(false)
 
+  // ✅ NEW: certificate flag
+  hasCertificate Boolean @default(false)
+
   categoryId String
   category   Category @relation(fields: [categoryId], references: [id])
 
@@ -118,6 +129,7 @@ model Course {
 
   purchaseRequests CoursePurchaseRequest[]
   reviews          CourseReview[]
+  certificates Certificate[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -201,6 +213,10 @@ enum CoinReason {
   LESSON_COMPLETION
   TRANSFER_IN
   TRANSFER_OUT
+  COURSE_PURCHASE
+  PURCHASE
+  REFERRAL
+  PROMO
 }
 
 enum SubmissionStatus {
@@ -286,6 +302,47 @@ model Notification {
   @@index([createdAt])
 }
 
+// ================= COIN PURCHASE REQUESTS =================
+
+enum PurchaseStatus {
+  PENDING
+  AWAITING_RECEIPT
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
+  EXPIRED
+}
+
+model CoinPurchaseRequest {
+  id             String         @id @default(uuid())
+  userId         String
+  coins          Int
+  amountUzs      Int
+  cardMasked     String?
+  receiptFileKey String?
+  status         PurchaseStatus @default(PENDING)
+  expiresAt      DateTime
+  reviewedById   String?
+  reviewedAt     DateTime?
+  adminNote      String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([status])
+}
+
+// ================= COURSE PURCHASE REQUESTS (OLD, REQUIRED) =================
+
+enum RequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 model CoursePurchaseRequest {
   id        String        @id @default(uuid())
   userId    String
@@ -295,12 +352,6 @@ model CoursePurchaseRequest {
 
   user   User   @relation(fields: [userId], references: [id])
   course Course @relation(fields: [courseId], references: [id])
-}
-
-enum RequestStatus {
-  PENDING
-  APPROVED
-  REJECTED
 }
 
 model CourseReview {
@@ -318,16 +369,16 @@ model CourseReview {
 }
 
 model Achievement {
-  id          String   @id @default(uuid())
+  id          String            @id @default(uuid())
   title       String
   description String
   rarity      AchievementRarity
   icon        String?
-  xpReward    Int      @default(0)
+  xpReward    Int               @default(0)
 
-  users       UserAchievement[]
+  users UserAchievement[]
 
-  createdAt   DateTime @default(now())
+  createdAt DateTime @default(now())
 }
 
 model UserAchievement {
@@ -342,10 +393,54 @@ model UserAchievement {
   @@unique([userId, achievementId])
 }
 
-
 enum AchievementRarity {
   COMMON
   RARE
   EPIC
   LEGENDARY
 }
+
+model PromoCode {
+  id        String @id @default(uuid())
+  code      String @unique
+  coins     Int
+  maxUses   Int?
+  usedCount Int    @default(0)
+
+  expiresAt DateTime?
+
+  createdBy String?
+
+  createdAt DateTime @default(now())
+
+  uses PromoCodeUse[]
+}
+
+model PromoCodeUse {
+  id      String @id @default(uuid())
+  userId  String
+  promoId String
+
+  createdAt DateTime @default(now())
+
+  user  User      @relation(fields: [userId], references: [id])
+  promo PromoCode @relation(fields: [promoId], references: [id])
+
+  @@unique([userId, promoId])
+}
+
+
+model Certificate {
+  id        String   @id @default(cuid())
+  code      String   @unique
+  userId    String
+  courseId  String
+  issuedAt  DateTime @default(now())
+
+  user   User   @relation(fields: [userId], references: [id])
+  course Course @relation(fields: [courseId], references: [id])
+
+  @@index([userId])
+  @@index([courseId])
+}
+

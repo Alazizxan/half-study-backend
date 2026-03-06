@@ -10,11 +10,9 @@ import {
   UseGuards,
   UseInterceptors,
   UploadedFile,
-  Req,
   Res,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-
 
 import { LessonsService } from './lessons.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
@@ -24,17 +22,14 @@ import { Role } from '@prisma/client';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { CreateLessonDto } from './dto/create-lesson.dto';
 import { UpdateLessonDto } from './dto/update-lesson.dto';
-import { PrismaService } from 'src/prisma/prisma.service';
-import { SubmissionsService } from '../submissions/submissions.service';
 
 @Controller('api/v1/lessons')
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard) // ✅ studentlar uchun 100% ochiq (faqat login shart)
 export class LessonsController {
-  constructor(private lessons: LessonsService,
-    private prisma: PrismaService,
-  ) {}
+  constructor(private lessons: LessonsService) {}
 
   @Post()
+  @UseGuards(RolesGuard)
   @Roles(Role.ADMIN)
   create(
     @CurrentUser() actor: any,
@@ -43,12 +38,14 @@ export class LessonsController {
     return this.lessons.create(actor, dto);
   }
 
+  // ✅ 8) LESSON DETAIL (student uchun)
   @Get(':id')
-  get(@Param('id') id: string) {
-    return this.lessons.getById(id);
+  get(@Param('id') id: string, @CurrentUser() user: any) {
+    return this.lessons.getLessonDetail(id, user.sub);
   }
 
   @Patch(':id')
+  @UseGuards(RolesGuard)
   @Roles(Role.ADMIN)
   update(
     @CurrentUser() actor: any,
@@ -59,6 +56,7 @@ export class LessonsController {
   }
 
   @Delete(':id')
+  @UseGuards(RolesGuard)
   @Roles(Role.ADMIN)
   delete(
     @CurrentUser() actor: any,
@@ -68,6 +66,7 @@ export class LessonsController {
   }
 
   @Patch(':id/publish')
+  @UseGuards(RolesGuard)
   @Roles(Role.ADMIN)
   publish(
     @CurrentUser() actor: any,
@@ -76,20 +75,21 @@ export class LessonsController {
     return this.lessons.publish(actor, id);
   }
 
-  // 🔥 ADMIN VIDEO UPLOAD
+  // ✅ ADMIN VIDEO UPLOAD
   @Post(':id/video')
+  @UseGuards(RolesGuard)
   @Roles(Role.ADMIN)
   @UseInterceptors(FileInterceptor('file', { dest: '/tmp' }))
-  async uploadLessonVideo(
+  uploadLessonVideo(
     @Param('id') id: string,
     @UploadedFile() file: Express.Multer.File,
   ) {
     return this.lessons.processVideo(id, file.path);
   }
 
-  // 🔥 USER STREAM ENDPOINT
+  // ✅ USER STREAM ENDPOINT (enrollment check LessonsService ichida)
   @Get(':id/stream')
-  async streamLesson(
+  streamLesson(
     @Param('id') id: string,
     @CurrentUser() user: any,
     @Res() res: Response,
