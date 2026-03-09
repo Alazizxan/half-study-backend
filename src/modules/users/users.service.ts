@@ -1,6 +1,6 @@
-import { Injectable, ForbiddenException, NotFoundException } from '@nestjs/common';
-import { PrismaService } from '../../prisma/prisma.service';
+import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { CoinReason, Role } from '@prisma/client';
+import { PrismaService } from '../../prisma/prisma.service';
 
 @Injectable()
 export class UsersService {
@@ -141,6 +141,7 @@ export class UsersService {
         return {
           course: {
             id: e.course.id,
+            slug: e.course.slug,
             title: e.course.title,
             coverImage: e.course.coverImage,
             difficulty: e.course.difficulty,

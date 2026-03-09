@@ -7,8 +7,6 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// ─── ENUMS ────────────────────────────────────────────────────────────────────
-
 enum Role {
   STUDENT
   MODERATOR
@@ -23,103 +21,6 @@ enum AuditAction {
   COIN_TRANSFER
   SUBMISSION_OVERRIDE
 }
-
-enum Difficulty {
-  BEGINNER
-  INTERMEDIATE
-  ADVANCED
-}
-
-enum PriceType {
-  FREE
-  COINS
-  PAID
-}
-
-enum CoinReason {
-  LESSON_COMPLETION
-  TRANSFER_IN
-  TRANSFER_OUT
-  COURSE_PURCHASE
-  PURCHASE
-  REFERRAL
-  PROMO
-}
-
-enum SubmissionStatus {
-  PENDING
-  APPROVED
-  REJECTED
-  NEEDS_REVISION
-  AI_GRADED
-}
-
-enum NotificationType {
-  SYSTEM
-  NEWS
-  AD
-  COURSE_UPDATE
-}
-
-enum PurchaseStatus {
-  PENDING
-  AWAITING_RECEIPT
-  UNDER_REVIEW
-  APPROVED
-  REJECTED
-  EXPIRED
-}
-
-enum RequestStatus {
-  PENDING
-  APPROVED
-  REJECTED
-}
-
-enum AchievementRarity {
-  COMMON
-  RARE
-  EPIC
-  LEGENDARY
-}
-
-enum UserTitle {
-  NEWCOMER        // yangi kelgan, 0-49 XP
-  APPRENTICE      // 50-199 XP
-  HIGH_IQ         // quiz passing rate > 85%  va xp >= 200
-  PRO             // kurs tugatgan >= 3, xp >= 500
-  RELENTLESS      // streak >= 14 kun
-  LEGEND          // top 3 leaderboard
-  AMBASSADOR      // referral >= 10 kishi
-}
-
-// ── NEW ENUMS ─────────────────────────────────────────────────────────────────
-
-enum QuestionType {
-  MULTIPLE_CHOICE
-  TRUE_FALSE
-  FLAG
-  TEXT
-  FILE_UPLOAD
-}
-
-enum QuizAttemptStatus {
-  IN_PROGRESS
-  COMPLETED
-  PASSED
-  FAILED
-}
-
-
-// ← QO'SHILDI
-enum VideoStatus {
-  NONE
-  PROCESSING
-  READY
-  ERROR
-}
-
-// ─── MODELS ───────────────────────────────────────────────────────────────────
 
 model User {
   id               String                  @id @default(uuid())
@@ -155,8 +56,6 @@ model User {
 
   achievements UserAchievement[]
 
-  stats UserStats?
-
   isEmailVerified Boolean   @default(false)
   failedAttempts  Int       @default(0)
   lockedUntil     DateTime?
@@ -167,12 +66,9 @@ model User {
   updatedAt DateTime @updatedAt
 
   certificates Certificate[]
-  auditLogs    AuditLog[]
 
+  auditLogs           AuditLog[]
   coinPurchaseRequest CoinPurchaseRequest[]
-
-  // NEW
-  quizAttempts QuizAttempt[]
 }
 
 model AuditLog {
@@ -187,6 +83,18 @@ model AuditLog {
   actor User @relation(fields: [actorId], references: [id])
 }
 
+enum Difficulty {
+  BEGINNER
+  INTERMEDIATE
+  ADVANCED
+}
+
+enum PriceType {
+  FREE
+  COINS
+  PAID
+}
+
 model Category {
   id   String @id @default(uuid())
   name String @unique
@@ -199,26 +107,29 @@ model Category {
 }
 
 model Course {
-  id             String     @id @default(uuid())
-  title          String
-  slug           String     @unique
-  description    String
-  coverImage     String?
-  difficulty     Difficulty
-  priceType      PriceType  @default(FREE)
-  coinPrice      Int?
-  moneyPrice     Float?
-  isPublished    Boolean    @default(false)
-  hasCertificate Boolean    @default(false)
+  id          String     @id @default(uuid())
+  title       String
+  slug        String     @unique
+  description String
+  coverImage  String?
+  difficulty  Difficulty
+  priceType   PriceType  @default(FREE)
+  coinPrice   Int?
+  moneyPrice  Float?
+  isPublished Boolean    @default(false)
+
+  // ✅ NEW: certificate flag
+  hasCertificate Boolean @default(false)
 
   categoryId String
   category   Category @relation(fields: [categoryId], references: [id])
 
-  lessons          Lesson[]
-  enrollments      Enrollment[]
+  lessons     Lesson[]
+  enrollments Enrollment[]
+
   purchaseRequests CoursePurchaseRequest[]
   reviews          CourseReview[]
-  certificates     Certificate[]
+  certificates Certificate[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -227,7 +138,7 @@ model Course {
 }
 
 model Lesson {
-  id           String  @id @default(uuid())
+  id           String @id @default(uuid())
   title        String
   content      String
   order        Int
@@ -237,8 +148,6 @@ model Lesson {
   course   Course @relation(fields: [courseId], references: [id])
 
   videoKey    String?
-  videoStatus VideoStatus @default(NONE)
-  
   isPublished Boolean @default(false)
 
   createdAt DateTime @default(now())
@@ -246,9 +155,6 @@ model Lesson {
 
   progresses  LessonProgress[]
   assignments Assignment[]
-
-  // NEW
-  quiz Quiz?
 
   @@unique([courseId, order])
   @@index([courseId])
@@ -303,7 +209,23 @@ model Wallet {
   user User @relation(fields: [userId], references: [id])
 }
 
-// ── Assignment (updated) ──────────────────────────────────────────────────────
+enum CoinReason {
+  LESSON_COMPLETION
+  TRANSFER_IN
+  TRANSFER_OUT
+  COURSE_PURCHASE
+  PURCHASE
+  REFERRAL
+  PROMO
+}
+
+enum SubmissionStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  NEEDS_REVISION
+  AI_GRADED
+}
 
 model Assignment {
   id          String @id @default(uuid())
@@ -314,18 +236,11 @@ model Assignment {
   lessonId String
   lesson   Lesson @relation(fields: [lessonId], references: [id])
 
-  // NEW fields
-  isRequired       Boolean  @default(false)
-  allowedFileTypes String[] @default(["jpg", "jpeg", "png", "pdf", "txt", "zip"])
-  maxFileSizeMb    Int      @default(10)
-
   submissions Submission[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
-
-// ── Submission (updated) ──────────────────────────────────────────────────────
 
 model Submission {
   id           String @id @default(uuid())
@@ -334,11 +249,6 @@ model Submission {
 
   textAnswer String?
   fileKey    String?
-
-  // NEW fields
-  fileName String?
-  fileSize Int?
-  aiNotes  String?
 
   score    Int?
   feedback String?
@@ -368,6 +278,13 @@ model Enrollment {
   @@index([courseId])
 }
 
+enum NotificationType {
+  SYSTEM
+  NEWS
+  AD
+  COURSE_UPDATE
+}
+
 model Notification {
   id     String           @id @default(uuid())
   userId String?
@@ -383,6 +300,17 @@ model Notification {
 
   @@index([userId])
   @@index([createdAt])
+}
+
+// ================= COIN PURCHASE REQUESTS =================
+
+enum PurchaseStatus {
+  PENDING
+  AWAITING_RECEIPT
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
+  EXPIRED
 }
 
 model CoinPurchaseRequest {
@@ -405,6 +333,14 @@ model CoinPurchaseRequest {
 
   @@index([userId])
   @@index([status])
+}
+
+// ================= COURSE PURCHASE REQUESTS (OLD, REQUIRED) =================
+
+enum RequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
 }
 
 model CoursePurchaseRequest {
@@ -457,6 +393,13 @@ model UserAchievement {
   @@unique([userId, achievementId])
 }
 
+enum AchievementRarity {
+  COMMON
+  RARE
+  EPIC
+  LEGENDARY
+}
+
 model PromoCode {
   id        String @id @default(uuid())
   code      String @unique
@@ -465,7 +408,9 @@ model PromoCode {
   usedCount Int    @default(0)
 
   expiresAt DateTime?
+
   createdBy String?
+
   createdAt DateTime @default(now())
 
   uses PromoCodeUse[]
@@ -484,12 +429,13 @@ model PromoCodeUse {
   @@unique([userId, promoId])
 }
 
+
 model Certificate {
-  id       String   @id @default(cuid())
-  code     String   @unique
-  userId   String
-  courseId String
-  issuedAt DateTime @default(now())
+  id        String   @id @default(cuid())
+  code      String   @unique
+  userId    String
+  courseId  String
+  issuedAt  DateTime @default(now())
 
   user   User   @relation(fields: [userId], references: [id])
   course Course @relation(fields: [courseId], references: [id])
@@ -498,155 +444,3 @@ model Certificate {
   @@index([courseId])
 }
 
-// ─── QUIZ SYSTEM (NEW) ────────────────────────────────────────────────────────
-
-model Quiz {
-  id               String  @id @default(uuid())
-  title            String
-  description      String?
-  lessonId         String  @unique
-  lesson           Lesson  @relation(fields: [lessonId], references: [id], onDelete: Cascade)
-
-  passingScore     Int     @default(60)   // minimum % to pass
-  shuffleQuestions Boolean @default(false)
-  timeLimit        Int?                   // minutes; null = no limit
-  maxAttempts      Int     @default(3)
-  isRequired       Boolean @default(true) // must pass to unlock next lesson
-
-  questions Question[]
-  attempts  QuizAttempt[]
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@index([lessonId])
-}
-
-model Question {
-  id       String       @id @default(uuid())
-  quizId   String
-  quiz     Quiz         @relation(fields: [quizId], references: [id], onDelete: Cascade)
-
-  type     QuestionType
-  text     String
-  imageUrl String?      // optional question image
-  points   Int          @default(10)
-  order    Int          @default(0)
-
-  options    QuestionOption[]
-  flagAnswer String?          // bcrypt hash — FLAG type only
-  rubric     String?          // grading guide — TEXT/FILE_UPLOAD
-
-  answers QuizAnswer[]
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@index([quizId])
-}
-
-model QuestionOption {
-  id         String   @id @default(uuid())
-  questionId String
-  question   Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
-
-  text      String
-  isCorrect Boolean @default(false)
-  order     Int     @default(0)
-
-  answers QuizAnswer[]
-
-  @@index([questionId])
-}
-
-model QuizAttempt {
-  id      String            @id @default(uuid())
-  quizId  String
-  quiz    Quiz              @relation(fields: [quizId], references: [id])
-  userId  String
-  user    User              @relation(fields: [userId], references: [id])
-
-  status      QuizAttemptStatus @default(IN_PROGRESS)
-  score       Int?              // 0-100 percentage
-  passed      Boolean?
-  startedAt   DateTime          @default(now())
-  submittedAt DateTime?
-
-  answers QuizAnswer[]
-
-  @@index([quizId, userId])
-}
-
-model QuizAnswer {
-  id        String      @id @default(uuid())
-  attemptId String
-  attempt   QuizAttempt @relation(fields: [attemptId], references: [id], onDelete: Cascade)
-
-  questionId String
-  question   Question @relation(fields: [questionId], references: [id])
-
-  // MULTIPLE_CHOICE / TRUE_FALSE
-  selectedOptionId String?
-  selectedOption   QuestionOption? @relation(fields: [selectedOptionId], references: [id])
-
-  // FLAG / TEXT
-  textAnswer String?
-
-  // FILE_UPLOAD
-  fileKey  String?
-  fileName String?
-  fileSize Int?
-
-  // Grading results
-  isCorrect Boolean?
-  score     Int?
-  feedback  String?
-
-  createdAt DateTime @default(now())
-
-  @@unique([attemptId, questionId])
-  @@index([attemptId])
-}
-
-
-
-model UserStats {
-  id     String @id @default(uuid())
-  userId String @unique
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  // XP / level
-  xp    Int @default(0)
-  level Int @default(1)
-
-  // Kurslar
-  coursesCompleted  Int @default(0)   // 100% progress bo'lgan kurslar
-  lessonsCompleted  Int @default(0)
-  assignmentsDone   Int @default(0)
-
-  // Quiz
-  quizzesTaken   Int @default(0)
-  quizzesPassed  Int @default(0)
-  quizPassRate   Float @default(0)   // 0-100
-
-  // Streak
-  currentStreak Int @default(0)
-  longestStreak Int @default(0)
-
-  // Referral
-  referralCount Int @default(0)
-
-  // Coins
-  coinsEarned Int @default(0)
-
-  // Computed rank score (weighted formula, cron tomonidan yangilanadi)
-  rankScore Float @default(0)
-
-  // Unvon
-  title UserTitle @default(NEWCOMER)
-
-  updatedAt DateTime @updatedAt
-
-  @@index([rankScore])
-  @@index([title])
-}

@@ -18,6 +18,9 @@ import { UploadModule } from './modules/upload/upload.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { AdminModule } from './modules/admin/admin.module';
 import { GamificationModule } from './modules/gamification/gamification.module';
+import { PromoModule } from './modules/promo/promo.module';
+import { QuizModule } from './modules/quiz/quiz.module';
+import { LeaderboardModule } from './modules/leaderboard/leaderboard.module';
 
 
 
@@ -39,6 +42,9 @@ import { GamificationModule } from './modules/gamification/gamification.module';
     NotificationsModule,
     AdminModule,
     GamificationModule,
+    PromoModule,
+    QuizModule,
+    
 
 
     LoggerModule.forRoot({
@@ -81,6 +87,13 @@ import { GamificationModule } from './modules/gamification/gamification.module';
     NotificationsModule,
 
     AdminModule,
+    GamificationModule,
+    
+    LeaderboardModule,
+
+
+
+
   ],
   providers: [
     {

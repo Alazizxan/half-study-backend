@@ -8,12 +8,12 @@ import {
   Body,
   UseGuards,
 } from '@nestjs/common';
-import { AssignmentsService } from './assignments.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
-import { Roles } from '../../common/decorators/roles.decorator';
 import { Role } from '@prisma/client';
+import { Roles } from '../../common/decorators/roles.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { AssignmentsService } from './assignments.service';
 import { CreateAssignmentDto } from './dto/create-assignment.dto';
 import { UpdateAssignmentDto } from './dto/update-assignment.dto';
 
@@ -53,10 +53,7 @@ export class AssignmentsController {
 
   @Delete(':id')
   @Roles(Role.ADMIN)
-  delete(
-    @CurrentUser() actor: any,
-    @Param('id') id: string,
-  ) {
+  delete(@CurrentUser() actor: any, @Param('id') id: string) {
     return this.assignments.delete(actor, id);
   }
 }
