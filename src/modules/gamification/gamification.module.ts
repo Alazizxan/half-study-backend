@@ -4,7 +4,7 @@ import { AchievementService } from './achievement.service';
 import { XpService } from './xp.service';
 
 @Module({
-    providers: [PrismaService, XpService, AchievementService],
-    exports: [XpService, AchievementService],
+  providers: [PrismaService, XpService, AchievementService],
+  exports: [XpService, AchievementService],
 })
-export class GamificationModule { }
+export class GamificationModule {}

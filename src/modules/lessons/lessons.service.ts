@@ -13,7 +13,12 @@ import type { Response } from 'express';
 import * as fs from 'fs';
 import * as path from 'path';
 
-const VIDEO_DIR = () => process.env.VIDEO_OUTPUT_DIR ?? '/var/www/secure-videos';
+
+const VIDEO_DIR = () =>
+  process.env.VIDEO_OUTPUT_DIR ?? path.join(process.cwd(), 'uploads', 'videos');
+
+// NODE_ENV=production bo'lsa Nginx X-Accel-Redirect, aks holda to'g'ridan fayl
+const IS_PROD = process.env.NODE_ENV === 'production';
 
 @Injectable()
 export class LessonsService {
@@ -21,12 +26,14 @@ export class LessonsService {
     private prisma: PrismaService,
     private unlock: LessonUnlockService,
     @InjectQueue('video') private videoQueue: Queue,
-  ) {}
+  ) { }
 
   // ── ADMIN: create ──────────────────────────────────────────────────────────
   async create(actor: any, dto: any) {
     if (actor.role !== Role.ADMIN) throw new ForbiddenException();
-    const course = await this.prisma.course.findUnique({ where: { id: dto.courseId } });
+    const course = await this.prisma.course.findUnique({
+      where: { id: dto.courseId },
+    });
     if (!course) throw new NotFoundException('Course not found');
     return this.prisma.lesson.create({ data: dto });
   }
@@ -51,7 +58,10 @@ export class LessonsService {
   // ── ADMIN: publish ─────────────────────────────────────────────────────────
   async publish(actor: any, id: string) {
     if (actor.role !== Role.ADMIN) throw new ForbiddenException();
-    return this.prisma.lesson.update({ where: { id }, data: { isPublished: true } });
+    return this.prisma.lesson.update({
+      where: { id },
+      data: { isPublished: true },
+    });
   }
 
   // ── ADMIN: video upload → Bull queue ──────────────────────────────────────
@@ -61,7 +71,9 @@ export class LessonsService {
       throw new ForbiddenException();
     }
 
-    const lesson = await this.prisma.lesson.findUnique({ where: { id: lessonId } });
+    const lesson = await this.prisma.lesson.findUnique({
+      where: { id: lessonId },
+    });
     if (!lesson) {
       if (fs.existsSync(file.path)) fs.unlinkSync(file.path);
       throw new NotFoundException('Lesson not found');
@@ -69,18 +81,23 @@ export class LessonsService {
 
     if (lesson.videoKey) {
       const oldDir = path.join(VIDEO_DIR(), lesson.videoKey);
-      if (fs.existsSync(oldDir)) fs.rmSync(oldDir, { recursive: true, force: true });
+      if (fs.existsSync(oldDir))
+        fs.rmSync(oldDir, { recursive: true, force: true });
     }
 
     await this.prisma.lesson.update({
       where: { id: lessonId },
-      data:  { videoStatus: 'PROCESSING', videoKey: null },
+      data: { videoStatus: 'PROCESSING', videoKey: null },
     });
 
     const job = await this.videoQueue.add(
       'encode',
       { lessonId, tempPath: file.path },
-      { attempts: 3, backoff: { type: 'exponential', delay: 10000 }, removeOnComplete: true },
+      {
+        attempts: 3,
+        backoff: { type: 'exponential', delay: 10000 },
+        removeOnComplete: true,
+      },
     );
 
     return { message: 'Video uploading. Encoding started.', jobId: job.id };
@@ -90,7 +107,7 @@ export class LessonsService {
   async getVideoStatus(actor: any, lessonId: string) {
     if (actor.role !== Role.ADMIN) throw new ForbiddenException();
     const lesson = await this.prisma.lesson.findUnique({
-      where:  { id: lessonId },
+      where: { id: lessonId },
       select: { id: true, videoStatus: true, videoKey: true },
     });
     if (!lesson) throw new NotFoundException();
@@ -100,8 +117,10 @@ export class LessonsService {
   // ── USER: HLS master playlist ──────────────────────────────────────────────
   async streamLesson(lessonId: string, userId: string, res: Response) {
     const lesson = await this.prisma.lesson.findUnique({ where: { id: lessonId } });
-    if (!lesson?.videoKey)              throw new NotFoundException('Video not found');
-    if (lesson.videoStatus !== 'READY') throw new BadRequestException('Video is still processing');
+    if (!lesson?.videoKey)
+      throw new NotFoundException('Video not found');
+    if (lesson.videoStatus !== 'READY')
+      throw new BadRequestException('Video is still processing');
 
     const enrollment = await this.prisma.enrollment.findFirst({
       where: { userId, courseId: lesson.courseId },
@@ -111,36 +130,66 @@ export class LessonsService {
     const canAccess = await this.unlock.canAccess(userId, lessonId);
     if (!canAccess) throw new ForbiddenException('Complete previous lesson first');
 
+   if (IS_PROD) {
     res.setHeader('X-Accel-Redirect', `/protected/${lesson.videoKey}/index.m3u8`);
     res.setHeader('Content-Type', 'application/vnd.apple.mpegurl');
     res.end();
+  } else {
+    const filePath = path.resolve(path.join(VIDEO_DIR(), lesson.videoKey, 'index.m3u8'));
+    if (!fs.existsSync(filePath)) throw new NotFoundException('Playlist file not found');
+
+    // m3u8 ni o'qib, segment URLlarni absolute qilib qaytarish
+    const content = fs.readFileSync(filePath, 'utf-8');
+    const baseUrl = `/api/v1/lessons/${lessonId}/stream`;
+    const rewritten = content.replace(/^(seg\w+\.ts)$/gm, `${baseUrl}/$1`);
+
+    res.setHeader('Content-Type', 'application/vnd.apple.mpegurl');
+    res.send(rewritten);
+  }
+
   }
 
   // ── USER: HLS segments ─────────────────────────────────────────────────────
   async streamSegment(lessonId: string, filename: string, userId: string, res: Response) {
+    // filename xavfsizlik tekshiruvi — path traversal oldini olish
+    const safeName = path.basename(filename);
+
     const lesson = await this.prisma.lesson.findUnique({ where: { id: lessonId } });
-    if (!lesson?.videoKey || lesson.videoStatus !== 'READY') throw new NotFoundException();
+    if (!lesson?.videoKey || lesson.videoStatus !== 'READY')
+      throw new NotFoundException();
 
     const enrollment = await this.prisma.enrollment.findFirst({
       where: { userId, courseId: lesson.courseId },
     });
     if (!enrollment) throw new ForbiddenException();
 
-    res.setHeader('X-Accel-Redirect', `/protected/${lesson.videoKey}/${filename}`);
-    res.setHeader(
-      'Content-Type',
-      filename.endsWith('.m3u8') ? 'application/vnd.apple.mpegurl' : 'video/mp2t',
-    );
-    res.end();
+    const contentType = safeName.endsWith('.m3u8')
+      ? 'application/vnd.apple.mpegurl'
+      : 'video/mp2t';
+
+    if (IS_PROD) {
+      res.setHeader('X-Accel-Redirect', `/protected/${lesson.videoKey}/${safeName}`);
+      res.setHeader('Content-Type', contentType);
+      res.end();
+    } else {
+      const filePath = path.resolve(path.join(VIDEO_DIR(), lesson.videoKey, safeName));
+      if (!fs.existsSync(filePath))
+        throw new NotFoundException('Segment not found');
+      res.setHeader('Content-Type', contentType);
+      res.sendFile(filePath, (err) => {
+        if (err) throw new NotFoundException('File not found');
+      });
+    }
   }
 
   // ── USER: lesson detail ────────────────────────────────────────────────────
   async getLessonDetail(lessonId: string, userId: string) {
     const lesson = await this.prisma.lesson.findUnique({
-      where:   { id: lessonId },
+      where: { id: lessonId },
       include: { course: { select: { id: true } } },
     });
-    if (!lesson || !lesson.isPublished) throw new NotFoundException('Lesson not found');
+    if (!lesson || !lesson.isPublished)
+      throw new NotFoundException('Lesson not found');
 
     const enrollment = await this.prisma.enrollment.findUnique({
       where: { userId_courseId: { userId, courseId: lesson.courseId } },
@@ -148,7 +197,8 @@ export class LessonsService {
     if (!enrollment) throw new ForbiddenException('Not enrolled');
 
     const isUnlocked = await this.unlock.canAccess(userId, lessonId);
-    if (!isUnlocked) throw new ForbiddenException('Complete previous lesson first');
+    if (!isUnlocked)
+      throw new ForbiddenException('Complete previous lesson first');
 
     const progress = await this.prisma.lessonProgress.findUnique({
       where: { userId_lessonId: { userId, lessonId } },
@@ -156,11 +206,19 @@ export class LessonsService {
 
     const [prev, next] = await Promise.all([
       this.prisma.lesson.findFirst({
-        where:  { courseId: lesson.courseId, isPublished: true, order: lesson.order - 1 },
+        where: {
+          courseId: lesson.courseId,
+          isPublished: true,
+          order: lesson.order - 1,
+        },
         select: { id: true },
       }),
       this.prisma.lesson.findFirst({
-        where:  { courseId: lesson.courseId, isPublished: true, order: lesson.order + 1 },
+        where: {
+          courseId: lesson.courseId,
+          isPublished: true,
+          order: lesson.order + 1,
+        },
         select: { id: true },
       }),
     ]);
@@ -168,27 +226,29 @@ export class LessonsService {
     const videoReady = lesson.videoKey && lesson.videoStatus === 'READY';
 
     return {
-      id:          lesson.id,
-      title:       lesson.title,
-      type:        videoReady
+      id: lesson.id,
+      title: lesson.title,
+      type: videoReady
         ? 'VIDEO'
         : lesson.videoStatus === 'PROCESSING'
-        ? 'PROCESSING'
-        : 'TEXT',
-      content:          lesson.content,
-      durationMin:      lesson.estimatedMin ?? 0,
-      videoUrl:         videoReady ? `/api/v1/lessons/${lesson.id}/stream` : null,
-      videoStatus:      lesson.videoStatus,
-      completed:        !!progress?.completed,
-      isUnlocked:       true,
+          ? 'PROCESSING'
+          : 'TEXT',
+      content: lesson.content,
+      durationMin: lesson.estimatedMin ?? 0,
+      videoUrl: videoReady ? `/api/v1/lessons/${lesson.id}/stream` : null,
+      videoStatus: lesson.videoStatus,
+      completed: !!progress?.completed,
+      isUnlocked: true,
       previousLessonId: prev?.id ?? null,
-      nextLessonId:     next?.id ?? null,
+      nextLessonId: next?.id ?? null,
     };
   }
 
   // ── USER: mark complete ────────────────────────────────────────────────────
   async markComplete(lessonId: string, userId: string) {
-    const lesson = await this.prisma.lesson.findUnique({ where: { id: lessonId } });
+    const lesson = await this.prisma.lesson.findUnique({
+      where: { id: lessonId },
+    });
     if (!lesson) throw new NotFoundException();
 
     const canAccess = await this.unlock.canAccess(userId, lessonId);
@@ -201,7 +261,7 @@ export class LessonsService {
 
     await this.prisma.$transaction(async (tx) => {
       await tx.lessonProgress.upsert({
-        where:  { userId_lessonId: { userId, lessonId } },
+        where: { userId_lessonId: { userId, lessonId } },
         create: { userId, lessonId, completed: true },
         update: { completed: true },
       });
@@ -211,7 +271,7 @@ export class LessonsService {
         });
         await tx.user.update({
           where: { id: userId },
-          data:  { xp: { increment: 10 } },
+          data: { xp: { increment: 10 } },
         });
       }
     });

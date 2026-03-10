@@ -22,8 +22,6 @@ import { PromoModule } from './modules/promo/promo.module';
 import { QuizModule } from './modules/quiz/quiz.module';
 import { LeaderboardModule } from './modules/leaderboard/leaderboard.module';
 
-
-
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
@@ -44,8 +42,6 @@ import { LeaderboardModule } from './modules/leaderboard/leaderboard.module';
     GamificationModule,
     PromoModule,
     QuizModule,
-    
-
 
     LoggerModule.forRoot({
       pinoHttp: {
@@ -55,10 +51,12 @@ import { LeaderboardModule } from './modules/leaderboard/leaderboard.module';
       },
     }),
 
-    ThrottlerModule.forRoot([{
-      ttl: 60_000,
-      limit: 100,
-    }]),
+    ThrottlerModule.forRoot([
+      {
+        ttl: 60_000,
+        limit: 100,
+      },
+    ]),
 
     PrismaModule,
 
@@ -88,12 +86,10 @@ import { LeaderboardModule } from './modules/leaderboard/leaderboard.module';
 
     AdminModule,
     GamificationModule,
-    
+
     LeaderboardModule,
-
-
-
-
+    PromoModule,
+    
   ],
   providers: [
     {
@@ -102,4 +98,4 @@ import { LeaderboardModule } from './modules/leaderboard/leaderboard.module';
     },
   ],
 })
-export class AppModule { }
+export class AppModule {}

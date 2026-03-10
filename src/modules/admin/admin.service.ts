@@ -4,11 +4,10 @@ import { Role } from '@prisma/client';
 
 @Injectable()
 export class AdminService {
-  constructor(private prisma: PrismaService) { }
+  constructor(private prisma: PrismaService) {}
 
   async dashboard(actor: any) {
-    if (actor.role !== Role.ADMIN)
-      throw new ForbiddenException();
+    if (actor.role !== Role.ADMIN) throw new ForbiddenException();
 
     const today = new Date();
     const thirtyDaysAgo = new Date();
@@ -54,7 +53,7 @@ export class AdminService {
     const users = await this.prisma.user.findMany({ select: { id: true } });
 
     await this.prisma.notification.createMany({
-      data: users.map(u => ({
+      data: users.map((u) => ({
         userId: u.id,
         type: 'SYSTEM',
         title: dto.title,
@@ -76,14 +75,12 @@ export class AdminService {
     };
   }
 
-
   async refund(dto: { userId: string; courseId: string }) {
     const course = await this.prisma.course.findUnique({
       where: { id: dto.courseId },
     });
 
-    if (!course?.coinPrice)
-      throw new ForbiddenException();
+    if (!course?.coinPrice) throw new ForbiddenException();
 
     await this.prisma.$transaction([
       this.prisma.enrollment.delete({

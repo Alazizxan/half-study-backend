@@ -70,9 +70,7 @@ export class EnrollmentService {
 
       // PAID
       if (course.priceType === PriceType.PAID) {
-        throw new ForbiddenException(
-          'Paid course requires payment approval',
-        );
+        throw new ForbiddenException('Paid course requires payment approval');
       }
     });
   }

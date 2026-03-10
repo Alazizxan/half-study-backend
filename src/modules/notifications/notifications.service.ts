@@ -46,8 +46,7 @@ export class NotificationsService {
   }
 
   async broadcast(actor: any, dto: any) {
-    if (actor.role !== Role.ADMIN)
-      throw new ForbiddenException();
+    if (actor.role !== Role.ADMIN) throw new ForbiddenException();
 
     await notificationQueue.add('broadcast', dto);
 

@@ -1,13 +1,15 @@
-import { BadRequestException, Injectable, UnauthorizedException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import * as argon2 from 'argon2';
 import { JwtService } from '@nestjs/jwt';
 import { AchievementService } from '../gamification/achievement.service';
-import { customAlphabet } from 'nanoid'
+import { customAlphabet } from 'nanoid';
 
-const nanoid = customAlphabet('ABCDEFGHJKLMNPQRSTUVWXYZ23456789', 8)
-
-
+const nanoid = customAlphabet('ABCDEFGHJKLMNPQRSTUVWXYZ23456789', 8);
 
 interface JwtPayload {
   sub: string;
@@ -20,28 +22,24 @@ export class AuthService {
     private prisma: PrismaService,
     private jwt: JwtService,
     private achievementService: AchievementService,
-  ) { }
+  ) {}
 
   async register(dto: any) {
+    const hash = await argon2.hash(dto.password);
 
-    const hash = await argon2.hash(dto.password)
-
-    let referredById: string | undefined
+    let referredById: string | undefined;
 
     if (dto.referralCode) {
-
       const refUser = await this.prisma.user.findUnique({
-        where: { referralCode: dto.referralCode }
-      })
+        where: { referralCode: dto.referralCode },
+      });
 
       if (refUser) {
-        referredById = refUser.id
+        referredById = refUser.id;
       }
-
     }
 
     try {
-
       const user = await this.prisma.user.create({
         data: {
           email: dto.email,
@@ -49,31 +47,27 @@ export class AuthService {
           displayName: dto.username,
           passwordHash: hash,
           referralCode: nanoid(),
-          referredById
-        }
-      })
+          referredById,
+        },
+      });
 
       if (referredById) {
-
         await this.prisma.coinEvent.create({
           data: {
             userId: referredById,
             amount: 10,
-            reason: "REFERRAL"
-          }
-        })
-
+            reason: 'REFERRAL',
+          },
+        });
       }
 
-      return user
-
+      return user;
     } catch (e: any) {
-
-      if (e.code === "P2002") {
-        throw new BadRequestException("EMAIL_OR_USERNAME_EXISTS")
+      if (e.code === 'P2002') {
+        throw new BadRequestException('EMAIL_OR_USERNAME_EXISTS');
       }
 
-      throw e
+      throw e;
     }
   }
 

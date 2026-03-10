@@ -1,14 +1,14 @@
 // src/leaderboard/leaderboard.module.ts
 
-import { Module }                from "@nestjs/common";
-import { LeaderboardService }    from "./leaderboard.service";
-import { LeaderboardController } from "./leaderboard.controller";
-import { PrismaModule }          from "../../prisma/prisma.module";
+import { Module } from '@nestjs/common';
+import { LeaderboardService } from './leaderboard.service';
+import { LeaderboardController } from './leaderboard.controller';
+import { PrismaModule } from '../../prisma/prisma.module';
 
 @Module({
-  imports:     [PrismaModule],
+  imports: [PrismaModule],
   controllers: [LeaderboardController],
-  providers:   [LeaderboardService],
-  exports:     [LeaderboardService],
+  providers: [LeaderboardService],
+  exports: [LeaderboardService],
 })
 export class LeaderboardModule {}

@@ -1,10 +1,4 @@
-import {
-  IsString,
-  IsUUID,
-  IsInt,
-  Min,
-  IsOptional,
-} from 'class-validator';
+import { IsString, IsUUID, IsInt, Min, IsOptional } from 'class-validator';
 
 export class CreateLessonDto {
   @IsString()

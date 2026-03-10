@@ -19,7 +19,7 @@ import { Public } from 'src/common/decorators/public.decorator';
 @Controller('api/v1/users')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class UsersController {
-  constructor(private users: UsersService) { }
+  constructor(private users: UsersService) {}
 
   @Get('me')
   getMe(@CurrentUser() user: any) {
@@ -27,10 +27,7 @@ export class UsersController {
   }
 
   @Patch('me')
-  updateMe(
-    @CurrentUser() user: any,
-    @Body() dto: UpdateProfileDto,
-  ) {
+  updateMe(@CurrentUser() user: any, @Body() dto: UpdateProfileDto) {
     return this.users.updateProfile(user.sub, dto);
   }
 
@@ -67,7 +64,6 @@ export class UsersController {
     return this.users.searchUsers(q);
   }
 
-
   @Get('me/achievements')
   getAchievements(@CurrentUser() user: any) {
     return this.users.getAchievements(user.sub);
@@ -78,9 +74,8 @@ export class UsersController {
     return this.users.getMyCourses(user.sub);
   }
 
-
-  @Get("me/referrals")
+  @Get('me/referrals')
   getReferrals(@CurrentUser() user: any) {
-    return this.users.getReferralStats(user.sub)
+    return this.users.getReferralStats(user.sub);
   }
 }

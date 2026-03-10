@@ -118,7 +118,9 @@ export class CoursesService {
         })
       : [];
 
-    const progressMap = new Map(progressList.map((p) => [p.lessonId, p.completed]));
+    const progressMap = new Map(
+      progressList.map((p) => [p.lessonId, p.completed]),
+    );
 
     const lessons = course.lessons.map((lesson, index) => {
       const completed = !!progressMap.get(lesson.id);
@@ -145,7 +147,9 @@ export class CoursesService {
         durationMin: lesson.estimatedMin || 0,
 
         videoKey: lesson.videoKey || null,
-        streamUrl: lesson.videoKey ? `/api/v1/lessons/${lesson.id}/stream` : null,
+        streamUrl: lesson.videoKey
+          ? `/api/v1/lessons/${lesson.id}/stream`
+          : null,
 
         completed,
         isUnlocked,
@@ -256,7 +260,8 @@ export class CoursesService {
       ]);
 
     const denom = studentsCount * (totalLessons || 1);
-    const completionRate = denom > 0 ? Math.round((completedAgg / denom) * 100) : 0;
+    const completionRate =
+      denom > 0 ? Math.round((completedAgg / denom) * 100) : 0;
 
     return {
       studentsCount,
@@ -310,7 +315,12 @@ export class CoursesService {
     });
 
     if (!enrollment) {
-      return { percent: 0, completedLessons: 0, totalLessons: 0, nextLessonId: null };
+      return {
+        percent: 0,
+        completedLessons: 0,
+        totalLessons: 0,
+        nextLessonId: null,
+      };
     }
 
     const lessons = await this.prisma.lesson.findMany({
@@ -326,11 +336,15 @@ export class CoursesService {
       select: { lessonId: true, completed: true },
     });
 
-    const completedSet = new Set(progresses.filter((p) => p.completed).map((p) => p.lessonId));
+    const completedSet = new Set(
+      progresses.filter((p) => p.completed).map((p) => p.lessonId),
+    );
     const completedLessons = completedSet.size;
 
     const percent =
-      totalLessons > 0 ? Math.round((completedLessons / totalLessons) * 100) : 0;
+      totalLessons > 0
+        ? Math.round((completedLessons / totalLessons) * 100)
+        : 0;
 
     let nextLessonId: string | null = null;
     for (let i = 0; i < lessons.length; i++) {
@@ -338,10 +352,16 @@ export class CoursesService {
       const done = completedSet.has(id);
 
       if (i === 0) {
-        if (!done) { nextLessonId = id; break; }
+        if (!done) {
+          nextLessonId = id;
+          break;
+        }
       } else {
         const prevId = lessons[i - 1].id;
-        if (completedSet.has(prevId) && !done) { nextLessonId = id; break; }
+        if (completedSet.has(prevId) && !done) {
+          nextLessonId = id;
+          break;
+        }
       }
     }
 

@@ -1,7 +1,13 @@
 // ─── submissions/submissions.controller.ts ───────────────────────────────────
 import {
-  Controller, Post, Get, Patch,
-  Param, Body, Query, UseGuards,
+  Controller,
+  Post,
+  Get,
+  Patch,
+  Param,
+  Body,
+  Query,
+  UseGuards,
 } from '@nestjs/common';
 import { JwtAuthGuard } from 'src/common/guards/jwt-auth.guard';
 import { RolesGuard } from 'src/common/guards/roles.guard';
@@ -9,7 +15,10 @@ import { Roles } from 'src/common/decorators/roles.decorator';
 import { CurrentUser } from 'src/common/decorators/current-user.decorator';
 import { SubmissionStatus, Role } from '@prisma/client';
 import { PrismaService } from 'src/prisma/prisma.service';
-import { CreateSubmissionDto, ReviewSubmissionDto } from './dto/create-submittion.dto';
+import {
+  CreateSubmissionDto,
+  ReviewSubmissionDto,
+} from './dto/create-submittion.dto';
 import { SubmissionsService } from './submissions.service';
 
 @Controller('api/v1/submissions')
@@ -28,10 +37,7 @@ export class SubmissionsController {
 
   // Student: get my submissions for an assignment
   @Get('my/:assignmentId')
-  getMy(
-    @CurrentUser() user: any,
-    @Param('assignmentId') assignmentId: string,
-  ) {
+  getMy(@CurrentUser() user: any, @Param('assignmentId') assignmentId: string) {
     return this.submissions.getMySubmissions(user.sub, assignmentId);
   }
 

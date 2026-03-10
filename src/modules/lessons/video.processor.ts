@@ -1,17 +1,25 @@
 import { Process, Processor, OnQueueFailed } from '@nestjs/bull';
-import { Logger } from '@nestjs/common';
-import type { Job } from 'bull';
-import { exec } from 'child_process';
-import * as fs from 'fs';
-import * as path from 'path';
-import { PrismaService } from '../../prisma/prisma.service';
+import { Logger }                             from '@nestjs/common';
+import type { Job }                           from 'bull';
+import { exec }                               from 'child_process';
+import * as fs                                from 'fs';
+import * as path                              from 'path';
+import { PrismaService }                      from '../../prisma/prisma.service';
+import ffmpegStatic                           from 'ffmpeg-static';
 
 export interface VideoJob {
   lessonId: string;
   tempPath: string;
 }
 
-const VIDEO_DIR = () => process.env.VIDEO_OUTPUT_DIR ?? '/var/www/secure-videos';
+const VIDEO_DIR = () =>
+  process.env.VIDEO_OUTPUT_DIR
+    ? path.resolve(process.env.VIDEO_OUTPUT_DIR)
+    : path.join(process.cwd(), 'uploads', 'videos');
+
+// Windows local: ffmpeg-static binary
+// Production Linux: FFMPEG_PATH=/usr/bin/ffmpeg (env orqali override)
+const FFMPEG = process.env.FFMPEG_PATH ?? (ffmpegStatic as string);
 
 @Processor('video')
 export class VideoProcessor {
@@ -30,20 +38,27 @@ export class VideoProcessor {
       fs.mkdirSync(outputDir, { recursive: true });
       await job.progress(5);
 
-      // 720p HLS — bitta sifat, har qanday format kiradi
+      // Windows backslash ni forward slash ga o'tkazish (ffmpeg talab qiladi)
+      const ffmpegBin  = FFMPEG.replace(/\\/g, '/');
+      const inputPath  = tempPath.replace(/\\/g, '/');
+      const segPattern = path.join(outputDir, 'seg%03d.ts').replace(/\\/g, '/');
+      const m3u8Path   = outputM3u8.replace(/\\/g, '/');
+
       const cmd = [
-        'ffmpeg -y',
-        `-i "${tempPath}"`,
+        `"${ffmpegBin}" -y`,
+        `-i "${inputPath}"`,
         '-vf "scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2"',
         '-c:v libx264 -preset fast -crf 23',
         '-c:a aac -b:a 128k',
         '-hls_time 10',
         '-hls_list_size 0',
         '-hls_segment_type mpegts',
-        `-hls_segment_filename "${outputDir}/seg%03d.ts"`,
+        `-hls_segment_filename "${segPattern}"`,
         '-f hls',
-        `"${outputM3u8}"`,
+        `"${m3u8Path}"`,
       ].join(' ');
+
+      this.logger.log(`Encoding lesson: ${lessonId}`);
 
       await new Promise<void>((resolve, reject) => {
         exec(cmd, { maxBuffer: 10 * 1024 * 1024 }, (err, _out, stderr) => {
@@ -62,6 +77,7 @@ export class VideoProcessor {
       if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
       await job.progress(100);
       this.logger.log(`✓ Encoded: ${lessonId}`);
+
     } catch (err) {
       if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
       await this.prisma.lesson.update({

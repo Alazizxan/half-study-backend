@@ -31,7 +31,7 @@ const CUSTOM_PRICE_PER_COIN_UZS = 6000;
 
 @Injectable()
 export class WalletService {
-  constructor(private prisma: PrismaService) { }
+  constructor(private prisma: PrismaService) {}
 
   async getBalance(userId: string) {
     const sum = await this.prisma.coinEvent.aggregate({
@@ -292,7 +292,11 @@ export class WalletService {
     return { items, meta: { page, pageSize, total } };
   }
 
-  async approvePurchaseRequest(adminId: string, requestId: string, note?: string) {
+  async approvePurchaseRequest(
+    adminId: string,
+    requestId: string,
+    note?: string,
+  ) {
     return this.prisma.$transaction(async (tx) => {
       const req = await tx.coinPurchaseRequest.findUnique({
         where: { id: requestId },
@@ -363,7 +367,11 @@ export class WalletService {
     });
   }
 
-  async rejectPurchaseRequest(adminId: string, requestId: string, note?: string) {
+  async rejectPurchaseRequest(
+    adminId: string,
+    requestId: string,
+    note?: string,
+  ) {
     return this.prisma.$transaction(async (tx) => {
       const req = await tx.coinPurchaseRequest.findUnique({
         where: { id: requestId },
@@ -395,16 +403,13 @@ export class WalletService {
     });
   }
 
-
-
   async getTransactions(userId: string, page = 1, pageSize = 20) {
-
     const skip = (page - 1) * pageSize;
 
     const [items, total] = await this.prisma.$transaction([
       this.prisma.coinEvent.findMany({
         where: { userId },
-        orderBy: { createdAt: "desc" },
+        orderBy: { createdAt: 'desc' },
         skip,
         take: pageSize,
       }),

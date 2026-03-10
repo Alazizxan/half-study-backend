@@ -177,8 +177,8 @@ export class LessonUnlockService {
         quizStatus = bestAttempt?.passed
           ? 'PASSED'
           : bestAttempt
-          ? 'FAILED'
-          : 'NOT_ATTEMPTED';
+            ? 'FAILED'
+            : 'NOT_ATTEMPTED';
       }
 
       results.push({

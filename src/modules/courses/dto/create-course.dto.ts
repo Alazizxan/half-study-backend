@@ -1,4 +1,10 @@
-import { IsEnum, IsOptional, IsString, IsUUID, IsNumber } from 'class-validator';
+import {
+  IsEnum,
+  IsOptional,
+  IsString,
+  IsUUID,
+  IsNumber,
+} from 'class-validator';
 import { Difficulty, PriceType } from '@prisma/client';
 
 export class CreateCourseDto {

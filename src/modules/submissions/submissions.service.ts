@@ -1,9 +1,17 @@
-import { Injectable, ForbiddenException, BadRequestException, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  ForbiddenException,
+  BadRequestException,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { UploadService } from '../upload/upload.service';
 import { SubmissionStatus, Role } from '@prisma/client';
 import { gradingQueue } from '../grading/grading.queue';
-import { CreateSubmissionDto, ReviewSubmissionDto } from './dto/create-submittion.dto';
+import {
+  CreateSubmissionDto,
+  ReviewSubmissionDto,
+} from './dto/create-submittion.dto';
 
 @Injectable()
 export class SubmissionsService {
@@ -25,7 +33,9 @@ export class SubmissionsService {
     });
 
     if (existing && existing.status === SubmissionStatus.PENDING) {
-      throw new BadRequestException('You have a pending submission. Wait for it to be reviewed.');
+      throw new BadRequestException(
+        'You have a pending submission. Wait for it to be reviewed.',
+      );
     }
 
     const submission = await this.prisma.submission.create({
@@ -33,16 +43,18 @@ export class SubmissionsService {
         userId,
         assignmentId: dto.assignmentId,
         textAnswer: dto.textAnswer,
-        fileKey:    dto.fileKey,
-        fileName:   dto.fileName,
-        fileSize:   dto.fileSize,
-        status:     SubmissionStatus.PENDING,
+        fileKey: dto.fileKey,
+        fileName: dto.fileName,
+        fileSize: dto.fileSize,
+        status: SubmissionStatus.PENDING,
       },
     });
 
     // Queue for AI pre-grading (text answers only)
     if (dto.textAnswer && !dto.fileKey) {
-      await gradingQueue.add('gradeSubmission', { submissionId: submission.id });
+      await gradingQueue.add('gradeSubmission', {
+        submissionId: submission.id,
+      });
     }
 
     return submission;
@@ -55,16 +67,16 @@ export class SubmissionsService {
     });
 
     // Enrich file URLs
-    return Promise.all(
-      submissions.map((s) => this.upload.enrichWithUrl(s)),
-    );
+    return Promise.all(submissions.map((s) => this.upload.enrichWithUrl(s)));
   }
 
   async listPending() {
     const submissions = await this.prisma.submission.findMany({
       where: { status: SubmissionStatus.PENDING },
       include: {
-        user: { select: { id: true, displayName: true, username: true, avatar: true } },
+        user: {
+          select: { id: true, displayName: true, username: true, avatar: true },
+        },
         assignment: { include: { lesson: { include: { course: true } } } },
       },
       orderBy: { createdAt: 'asc' },
@@ -82,7 +94,9 @@ export class SubmissionsService {
         }),
       },
       include: {
-        user: { select: { id: true, displayName: true, username: true, avatar: true } },
+        user: {
+          select: { id: true, displayName: true, username: true, avatar: true },
+        },
         assignment: { include: { lesson: { include: { course: true } } } },
       },
       orderBy: { createdAt: 'desc' },
@@ -96,14 +110,16 @@ export class SubmissionsService {
     if (actor.role !== Role.MODERATOR && actor.role !== Role.ADMIN)
       throw new ForbiddenException();
 
-    const submission = await this.prisma.submission.findUnique({ where: { id } });
+    const submission = await this.prisma.submission.findUnique({
+      where: { id },
+    });
     if (!submission) throw new NotFoundException();
 
     return this.prisma.submission.update({
       where: { id },
       data: {
-        status:   dto.status,
-        score:    dto.score,
+        status: dto.status,
+        score: dto.score,
         feedback: dto.feedback,
       },
     });

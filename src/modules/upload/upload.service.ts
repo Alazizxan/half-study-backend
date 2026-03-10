@@ -67,7 +67,10 @@ export class UploadService {
     return MAX_SIZE_MB.receipt * 1024 * 1024;
   }
 
-  private validateMimeType(contentType: string, allowedCategory: AllowedCategory) {
+  private validateMimeType(
+    contentType: string,
+    allowedCategory: AllowedCategory,
+  ) {
     const allowed = ALLOWED_TYPES[allowedCategory];
     if (!allowed.includes(contentType)) {
       throw new BadRequestException(
@@ -88,7 +91,11 @@ export class UploadService {
     }
   }
 
-  private buildFileKey(folder: UploadFolder, fileName: string, userId?: string) {
+  private buildFileKey(
+    folder: UploadFolder,
+    fileName: string,
+    userId?: string,
+  ) {
     const ext = path.extname(fileName).toLowerCase();
     const safeExt = ext || '';
     const id = crypto.randomUUID();
@@ -142,11 +149,7 @@ export class UploadService {
 
   // ✅ OLD FLOW COMPATIBILITY
   // eski frontend uchun: /signed-url
-  async generateUploadUrl(
-    userId: string,
-    filename: string,
-    mimeType: string,
-  ) {
+  async generateUploadUrl(userId: string, filename: string, mimeType: string) {
     this.ensureBucket();
 
     const allowed = [
@@ -179,7 +182,10 @@ export class UploadService {
   }
 
   // ✅ DOWNLOAD URL
-  async getSignedDownloadUrl(fileKey: string, expiresIn = 3600): Promise<string> {
+  async getSignedDownloadUrl(
+    fileKey: string,
+    expiresIn = 3600,
+  ): Promise<string> {
     this.ensureBucket();
 
     const command = new GetObjectCommand({

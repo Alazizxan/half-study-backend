@@ -1,11 +1,4 @@
-import {
-  Body,
-  Controller,
-  Get,
-  Post,
-  Query,
-  UseGuards,
-} from '@nestjs/common';
+import { Body, Controller, Get, Post, Query, UseGuards } from '@nestjs/common';
 import { PromoService } from './promo.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
@@ -20,10 +13,7 @@ export class PromoController {
 
   // ✅ USER: redeem
   @Post('redeem')
-  redeem(
-    @CurrentUser() user: any,
-    @Body() dto: { code: string },
-  ) {
+  redeem(@CurrentUser() user: any, @Body() dto: { code: string }) {
     return this.promo.redeemPromo(user.sub, dto);
   }
 

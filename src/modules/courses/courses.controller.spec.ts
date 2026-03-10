@@ -18,7 +18,7 @@ import { Role } from '@prisma/client';
 
 @Controller('api/v1/courses')
 export class CoursesController {
-  constructor(private courses: CoursesService) { }
+  constructor(private courses: CoursesService) {}
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Post()
@@ -27,10 +27,7 @@ export class CoursesController {
   }
 
   @Get()
-  list(
-    @Query('page') page = 1,
-    @Query('pageSize') pageSize = 10,
-  ) {
+  list(@Query('page') page = 1, @Query('pageSize') pageSize = 10) {
     return this.courses.list(Number(page), Number(pageSize));
   }
 
@@ -44,7 +41,6 @@ export class CoursesController {
   publish(@CurrentUser() actor: any, @Param('id') id: string) {
     return this.courses.publish(actor, id);
   }
-
 
   @Get(':id/analytics')
   @Roles(Role.ADMIN)

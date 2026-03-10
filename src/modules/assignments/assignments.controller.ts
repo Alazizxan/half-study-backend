@@ -24,10 +24,7 @@ export class AssignmentsController {
 
   @Post()
   @Roles(Role.ADMIN)
-  create(
-    @CurrentUser() actor: any,
-    @Body() dto: CreateAssignmentDto,
-  ) {
+  create(@CurrentUser() actor: any, @Body() dto: CreateAssignmentDto) {
     return this.assignments.create(actor, dto);
   }
 

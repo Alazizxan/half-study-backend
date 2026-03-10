@@ -45,8 +45,7 @@ describe('Auth Flow', () => {
       .expect(201);
 
     // 🔥 Endi cookie avtomatik yuboriladi
-    const protectedReq = await agent
-      .get('/api/v1/users/me');
+    const protectedReq = await agent.get('/api/v1/users/me');
 
     expect(protectedReq.status).toBe(200);
   });

@@ -1,8 +1,16 @@
 // ─── create-quiz.dto.ts ───────────────────────────────────────────────────────
 import {
-  IsString, IsOptional, IsInt, IsBoolean,
-  Min, Max, ValidateNested, IsArray, IsEnum,
-  IsUrl, MinLength,
+  IsString,
+  IsOptional,
+  IsInt,
+  IsBoolean,
+  Min,
+  Max,
+  ValidateNested,
+  IsArray,
+  IsEnum,
+  IsUrl,
+  MinLength,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { QuestionType } from '@prisma/client';

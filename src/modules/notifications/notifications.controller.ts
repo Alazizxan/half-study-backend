@@ -26,18 +26,11 @@ export class NotificationsController {
     @Query('page') page = 1,
     @Query('pageSize') pageSize = 10,
   ) {
-    return this.notifications.list(
-      user.sub,
-      Number(page),
-      Number(pageSize),
-    );
+    return this.notifications.list(user.sub, Number(page), Number(pageSize));
   }
 
   @Patch(':id/read')
-  markRead(
-    @CurrentUser() user: any,
-    @Param('id') id: string,
-  ) {
+  markRead(@CurrentUser() user: any, @Param('id') id: string) {
     return this.notifications.markRead(user.sub, id);
   }
 

@@ -1,7 +1,14 @@
 // ─── assignments/dto/create-assignment.dto.ts ────────────────────────────────
 import {
-  IsString, IsInt, IsBoolean, IsOptional,
-  IsArray, Min, Max, MinLength, ArrayMaxSize,
+  IsString,
+  IsInt,
+  IsBoolean,
+  IsOptional,
+  IsArray,
+  Min,
+  Max,
+  MinLength,
+  ArrayMaxSize,
 } from 'class-validator';
 
 export class CreateAssignmentDto {

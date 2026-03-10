@@ -74,10 +74,7 @@ export class QuizController {
 
   // Get quiz for a lesson (no correct answers exposed)
   @Get('lesson/:lessonId')
-  getByLesson(
-    @CurrentUser() user: any,
-    @Param('lessonId') lessonId: string,
-  ) {
+  getByLesson(@CurrentUser() user: any, @Param('lessonId') lessonId: string) {
     return this.quizService.getByLesson(lessonId, user.sub);
   }
 

@@ -24,7 +24,7 @@ import { Role } from '@prisma/client';
 @Controller('api/v1/wallet')
 @UseGuards(JwtAuthGuard)
 export class WalletController {
-  constructor(private wallet: WalletService) { }
+  constructor(private wallet: WalletService) {}
 
   @Get()
   balance(@CurrentUser() user: any) {
@@ -106,13 +106,16 @@ export class WalletController {
     return this.wallet.rejectPurchaseRequest(admin.sub, id, dto?.note);
   }
 
-
   @Get('transactions')
   transactions(
     @CurrentUser() user: any,
     @Query('page') page = 1,
     @Query('pageSize') pageSize = 20,
   ) {
-    return this.wallet.getTransactions(user.sub, Number(page), Number(pageSize));
+    return this.wallet.getTransactions(
+      user.sub,
+      Number(page),
+      Number(pageSize),
+    );
   }
 }

@@ -23,10 +23,7 @@ export class WalletAdminController {
   constructor(private prisma: PrismaService) {}
 
   @Get('purchase-requests/:id/receipt')
-  async downloadReceipt(
-    @Param('id') id: string,
-    @Res() res: Response,
-  ) {
+  async downloadReceipt(@Param('id') id: string, @Res() res: Response) {
     const req = await this.prisma.coinPurchaseRequest.findUnique({
       where: { id },
       select: {
@@ -47,10 +44,7 @@ export class WalletAdminController {
 
     const filename = path.basename(filePath);
 
-    res.setHeader(
-      'Content-Disposition',
-      `attachment; filename="${filename}"`,
-    );
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
 
     // content-type ni minimal
     res.setHeader('Content-Type', 'application/octet-stream');

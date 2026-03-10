@@ -11,17 +11,22 @@ import { PrismaService } from '../../prisma/prisma.service';
 export class PromoService {
   constructor(private prisma: PrismaService) {}
 
-  async createPromo(actor: any, dto: {
-    code: string;
-    coins: number;
-    maxUses?: number | null;
-    expiresAt?: string | null;
-  }) {
+  async createPromo(
+    actor: any,
+    dto: {
+      code: string;
+      coins: number;
+      maxUses?: number | null;
+      expiresAt?: string | null;
+    },
+  ) {
     if (actor.role !== Role.ADMIN) {
       throw new ForbiddenException();
     }
 
-    const code = String(dto.code || '').trim().toUpperCase();
+    const code = String(dto.code || '')
+      .trim()
+      .toUpperCase();
     const coins = Number(dto.coins);
 
     if (!code) {
@@ -70,7 +75,9 @@ export class PromoService {
   }
 
   async redeemPromo(userId: string, dto: { code: string }) {
-    const code = String(dto.code || '').trim().toUpperCase();
+    const code = String(dto.code || '')
+      .trim()
+      .toUpperCase();
 
     if (!code) {
       throw new BadRequestException('INVALID_CODE');

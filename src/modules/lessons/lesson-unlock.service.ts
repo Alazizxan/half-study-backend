@@ -16,7 +16,7 @@ export class LessonUnlockService {
    */
   async canAccess(userId: string, lessonId: string): Promise<boolean> {
     const lesson = await this.prisma.lesson.findUnique({
-      where:   { id: lessonId },
+      where: { id: lessonId },
       include: { course: { include: { enrollments: { where: { userId } } } } },
     });
 
@@ -25,10 +25,12 @@ export class LessonUnlockService {
     if (lesson.order === 1) return true;
 
     const prev = await this.prisma.lesson.findUnique({
-      where:   { courseId_order: { courseId: lesson.courseId, order: lesson.order - 1 } },
+      where: {
+        courseId_order: { courseId: lesson.courseId, order: lesson.order - 1 },
+      },
       include: {
-        progresses:  { where: { userId } },
-        quiz:        { select: { id: true, isRequired: true } },
+        progresses: { where: { userId } },
+        quiz: { select: { id: true, isRequired: true } },
         assignments: { select: { id: true, isRequired: true } },
       },
     });
@@ -48,7 +50,11 @@ export class LessonUnlockService {
     const requiredAssignments = prev.assignments.filter((a) => a.isRequired);
     for (const assignment of requiredAssignments) {
       const approved = await this.prisma.submission.findFirst({
-        where: { userId, assignmentId: assignment.id, status: SubmissionStatus.APPROVED },
+        where: {
+          userId,
+          assignmentId: assignment.id,
+          status: SubmissionStatus.APPROVED,
+        },
       });
       if (!approved) return false;
     }
@@ -62,66 +68,73 @@ export class LessonUnlockService {
    */
   async getLessonsWithUnlockStatus(userId: string, courseId: string) {
     const lessons = await this.prisma.lesson.findMany({
-      where:   { courseId },
+      where: { courseId },
       orderBy: { order: 'asc' },
       include: {
-        progresses:  { where: { userId } },
-        quiz:        { select: { id: true, isRequired: true, title: true, passingScore: true } },
+        progresses: { where: { userId } },
+        quiz: {
+          select: {
+            id: true,
+            isRequired: true,
+            title: true,
+            passingScore: true,
+          },
+        },
         assignments: { select: { id: true, title: true, isRequired: true } },
       },
     });
 
     // typed array — "never" xatosini hal qiladi
     const results: Array<{
-      id:           string;
-      title:        string;
-      order:        number;
+      id: string;
+      title: string;
+      order: number;
       estimatedMin: number | null;
-      isPublished:  boolean;
-      isUnlocked:   boolean;
-      isCompleted:  boolean;
+      isPublished: boolean;
+      isUnlocked: boolean;
+      isCompleted: boolean;
       quiz: {
-        id:           string;
-        title:        string;
+        id: string;
+        title: string;
         passingScore: number;
-        isRequired:   boolean;
-        userStatus:   'PASSED' | 'FAILED' | 'NOT_ATTEMPTED' | null;
+        isRequired: boolean;
+        userStatus: 'PASSED' | 'FAILED' | 'NOT_ATTEMPTED' | null;
       } | null;
       assignments: { id: string; title: string; isRequired: boolean }[];
     }> = [];
 
     for (const lesson of lessons) {
-      const isUnlocked  = await this.canAccess(userId, lesson.id);
+      const isUnlocked = await this.canAccess(userId, lesson.id);
       const isCompleted = lesson.progresses?.[0]?.completed ?? false;
 
       let quizStatus: 'PASSED' | 'FAILED' | 'NOT_ATTEMPTED' | null = null;
       if (lesson.quiz) {
         const bestAttempt = await this.prisma.quizAttempt.findFirst({
-          where:   { quizId: lesson.quiz.id, userId },
+          where: { quizId: lesson.quiz.id, userId },
           orderBy: { score: 'desc' },
         });
         quizStatus = bestAttempt?.passed
           ? 'PASSED'
           : bestAttempt
-          ? 'FAILED'
-          : 'NOT_ATTEMPTED';
+            ? 'FAILED'
+            : 'NOT_ATTEMPTED';
       }
 
       results.push({
-        id:           lesson.id,
-        title:        lesson.title,
-        order:        lesson.order,
+        id: lesson.id,
+        title: lesson.title,
+        order: lesson.order,
         estimatedMin: lesson.estimatedMin,
-        isPublished:  lesson.isPublished,
+        isPublished: lesson.isPublished,
         isUnlocked,
         isCompleted,
         quiz: lesson.quiz
           ? {
-              id:           lesson.quiz.id,
-              title:        lesson.quiz.title,
+              id: lesson.quiz.id,
+              title: lesson.quiz.title,
               passingScore: lesson.quiz.passingScore,
-              isRequired:   lesson.quiz.isRequired,
-              userStatus:   quizStatus,
+              isRequired: lesson.quiz.isRequired,
+              userStatus: quizStatus,
             }
           : null,
         assignments: lesson.assignments,

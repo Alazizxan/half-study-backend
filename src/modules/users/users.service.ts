@@ -1,10 +1,14 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { CoinReason, Role } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 
 @Injectable()
 export class UsersService {
-  constructor(private prisma: PrismaService) { }
+  constructor(private prisma: PrismaService) {}
 
   async getProfile(userId: string) {
     return this.prisma.user.findUnique({
@@ -30,8 +34,7 @@ export class UsersService {
   }
 
   async changeRole(actor: any, targetId: string, role: Role) {
-    if (actor.role !== Role.ADMIN)
-      throw new ForbiddenException();
+    if (actor.role !== Role.ADMIN) throw new ForbiddenException();
 
     return this.prisma.user.update({
       where: { id: targetId },
@@ -40,8 +43,7 @@ export class UsersService {
   }
 
   async banUser(actor: any, targetId: string) {
-    if (actor.role !== Role.ADMIN)
-      throw new ForbiddenException();
+    if (actor.role !== Role.ADMIN) throw new ForbiddenException();
 
     return this.prisma.user.update({
       where: { id: targetId },
@@ -52,8 +54,7 @@ export class UsersService {
   }
 
   async unbanUser(actor: any, targetId: string) {
-    if (actor.role !== Role.ADMIN)
-      throw new ForbiddenException();
+    if (actor.role !== Role.ADMIN) throw new ForbiddenException();
 
     return this.prisma.user.update({
       where: { id: targetId },
@@ -85,10 +86,9 @@ export class UsersService {
       },
     });
 
-    const achievementsUnlocked =
-      await this.prisma.userAchievement.count({
-        where: { userId },
-      });
+    const achievementsUnlocked = await this.prisma.userAchievement.count({
+      where: { userId },
+    });
 
     return {
       streak: user.currentStreak,
@@ -110,7 +110,6 @@ export class UsersService {
       orderBy: { unlockedAt: 'desc' },
     });
   }
-
 
   async getMyCourses(userId: string) {
     const enrollments = await this.prisma.enrollment.findMany({
@@ -157,51 +156,44 @@ export class UsersService {
   }
 
   async searchUsers(q: string) {
-
     if (!q || q.length < 2) return [];
 
     return this.prisma.user.findMany({
       where: {
         OR: [
-          { username: { contains: q, mode: "insensitive" } },
-          { email: { contains: q, mode: "insensitive" } },
-          { displayName: { contains: q, mode: "insensitive" } }
-        ]
+          { username: { contains: q, mode: 'insensitive' } },
+          { email: { contains: q, mode: 'insensitive' } },
+          { displayName: { contains: q, mode: 'insensitive' } },
+        ],
       },
       select: {
         id: true,
         username: true,
         displayName: true,
-        email: true
+        email: true,
       },
-      take: 10
+      take: 10,
     });
-
   }
 
   async getReferralStats(userId: string) {
-
     const count = await this.prisma.user.count({
       where: {
-        referredById: userId
-      }
-    })
+        referredById: userId,
+      },
+    });
 
     const coins = await this.prisma.coinEvent.aggregate({
       where: {
         userId,
-        reason: CoinReason.REFERRAL
+        reason: CoinReason.REFERRAL,
       },
-      _sum: { amount: true }
-    })
+      _sum: { amount: true },
+    });
 
     return {
       referrals: count,
-      coinsEarned: coins?._sum?.amount ?? 0
-    }
-
+      coinsEarned: coins?._sum?.amount ?? 0,
+    };
   }
-
 }
-
-

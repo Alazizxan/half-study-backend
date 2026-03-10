@@ -1,10 +1,4 @@
-import {
-  Body,
-  Controller,
-  Get,
-  Post,
-  UseGuards,
-} from '@nestjs/common';
+import { Body, Controller, Get, Post, UseGuards } from '@nestjs/common';
 import { AdminService } from './admin.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
@@ -15,7 +9,7 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 @Controller('api/v1/admin')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class AdminController {
-  constructor(private admin: AdminService) { }
+  constructor(private admin: AdminService) {}
 
   @Get('dashboard')
   @Roles(Role.ADMIN)

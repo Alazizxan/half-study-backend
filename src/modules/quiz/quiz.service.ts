@@ -103,10 +103,14 @@ export class QuizService {
                   ...qData,
                   order: q.order ?? idx,
                   flagAnswer: hashedFlag,
-                  options:
-                    options?.length
-                      ? { create: options.map((o, oi) => ({ ...o, order: o.order ?? oi })) }
-                      : undefined,
+                  options: options?.length
+                    ? {
+                        create: options.map((o, oi) => ({
+                          ...o,
+                          order: o.order ?? oi,
+                        })),
+                      }
+                    : undefined,
                 };
               }),
             ),
@@ -158,10 +162,9 @@ export class QuizService {
     const attemptsUsed = attempts.length;
 
     // Shuffle questions if enabled
-    const questions =
-      quiz.shuffleQuestions
-        ? [...quiz.questions].sort(() => Math.random() - 0.5)
-        : quiz.questions;
+    const questions = quiz.shuffleQuestions
+      ? [...quiz.questions].sort(() => Math.random() - 0.5)
+      : quiz.questions;
 
     return {
       ...quiz,
@@ -211,9 +214,12 @@ export class QuizService {
       where: { quizId, userId, passed: true },
     });
 
-    if (alreadyPassed) throw new BadRequestException('You already passed this quiz');
+    if (alreadyPassed)
+      throw new BadRequestException('You already passed this quiz');
     if (attempts >= quiz.maxAttempts)
-      throw new BadRequestException(`Maximum ${quiz.maxAttempts} attempts reached`);
+      throw new BadRequestException(
+        `Maximum ${quiz.maxAttempts} attempts reached`,
+      );
 
     // Cancel any existing IN_PROGRESS attempt
     await this.prisma.quizAttempt.updateMany({
@@ -311,22 +317,24 @@ export class QuizService {
 
     // Calculate score percentage (only auto-graded questions)
     const autoTotal = quiz.questions
-      .filter((q) => q.type !== QuestionType.TEXT && q.type !== QuestionType.FILE_UPLOAD)
+      .filter(
+        (q) =>
+          q.type !== QuestionType.TEXT && q.type !== QuestionType.FILE_UPLOAD,
+      )
       .reduce((sum, q) => sum + q.points, 0);
 
-    const scorePercent = autoTotal > 0
-      ? Math.round((earnedPoints / autoTotal) * 100)
-      : null;
+    const scorePercent =
+      autoTotal > 0 ? Math.round((earnedPoints / autoTotal) * 100) : null;
 
-    const passed = scorePercent !== null
-      ? scorePercent >= quiz.passingScore
-      : null; // null = pending manual review
+    const passed =
+      scorePercent !== null ? scorePercent >= quiz.passingScore : null; // null = pending manual review
 
-    const status = hasManualQuestions && passed === null
-      ? QuizAttemptStatus.COMPLETED  // wait for manual review
-      : passed
-      ? QuizAttemptStatus.PASSED
-      : QuizAttemptStatus.FAILED;
+    const status =
+      hasManualQuestions && passed === null
+        ? QuizAttemptStatus.COMPLETED // wait for manual review
+        : passed
+          ? QuizAttemptStatus.PASSED
+          : QuizAttemptStatus.FAILED;
 
     // Update attempt
     const updated = await this.prisma.quizAttempt.update({
@@ -338,7 +346,9 @@ export class QuizService {
         submittedAt: new Date(),
       },
       include: {
-        answers: { include: { question: { select: { type: true, points: true } } } },
+        answers: {
+          include: { question: { select: { type: true, points: true } } },
+        },
       },
     });
 
@@ -351,8 +361,8 @@ export class QuizService {
       message: hasManualQuestions
         ? 'Some answers require manual review by a moderator'
         : passed
-        ? `Passed! Score: ${scorePercent}%`
-        : `Failed. Score: ${scorePercent}%. Need ${quiz.passingScore}% to pass`,
+          ? `Passed! Score: ${scorePercent}%`
+          : `Failed. Score: ${scorePercent}%. Need ${quiz.passingScore}% to pass`,
     };
   }
 
@@ -364,7 +374,9 @@ export class QuizService {
       include: {
         answers: {
           include: {
-            question: { select: { text: true, type: true, points: true, order: true } },
+            question: {
+              select: { text: true, type: true, points: true, order: true },
+            },
             selectedOption: { select: { text: true } },
           },
           orderBy: { question: { order: 'asc' } },
@@ -418,11 +430,16 @@ export class QuizService {
     });
     if (!attempt) return;
 
-    const totalPoints = attempt.quiz.questions.reduce((s, q) => s + q.points, 0);
-    const earnedPoints = attempt.answers.reduce((s, a) => s + (a.score ?? 0), 0);
-    const scorePercent = totalPoints > 0
-      ? Math.round((earnedPoints / totalPoints) * 100)
-      : 0;
+    const totalPoints = attempt.quiz.questions.reduce(
+      (s, q) => s + q.points,
+      0,
+    );
+    const earnedPoints = attempt.answers.reduce(
+      (s, a) => s + (a.score ?? 0),
+      0,
+    );
+    const scorePercent =
+      totalPoints > 0 ? Math.round((earnedPoints / totalPoints) * 100) : 0;
 
     const passed = scorePercent >= attempt.quiz.passingScore;
 
@@ -445,9 +462,13 @@ export class QuizService {
       where: { quizId },
       orderBy: { startedAt: 'desc' },
       include: {
-        user: { select: { id: true, displayName: true, username: true, avatar: true } },
+        user: {
+          select: { id: true, displayName: true, username: true, avatar: true },
+        },
         answers: {
-          include: { question: { select: { text: true, type: true, points: true } } },
+          include: {
+            question: { select: { text: true, type: true, points: true } },
+          },
         },
       },
     });

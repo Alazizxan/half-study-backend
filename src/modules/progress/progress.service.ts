@@ -1,4 +1,8 @@
-import { Injectable, ForbiddenException, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { XpService } from '../gamification/xp.service';
 import { AchievementService } from '../gamification/achievement.service';
@@ -29,8 +33,7 @@ export class ProgressService {
         },
       });
 
-      if (!enrollment)
-        throw new ForbiddenException('Not enrolled');
+      if (!enrollment) throw new ForbiddenException('Not enrolled');
 
       // 2️⃣ Idempotent check
       const existing = await tx.lessonProgress.findUnique({

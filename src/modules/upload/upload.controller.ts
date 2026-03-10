@@ -1,9 +1,4 @@
-import {
-  Controller,
-  Post,
-  Body,
-  UseGuards,
-} from '@nestjs/common';
+import { Controller, Post, Body, UseGuards } from '@nestjs/common';
 import { IsString, IsInt, IsIn, Min, Max, IsOptional } from 'class-validator';
 import { UploadService } from './upload.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
@@ -44,10 +39,7 @@ export class UploadController {
 
   // ✅ ESKI ENDPOINT — o'zgarmaydi
   @Post('signed-url')
-  generate(
-    @CurrentUser() user: any,
-    @Body() body: SignedUrlDto,
-  ) {
+  generate(@CurrentUser() user: any, @Body() body: SignedUrlDto) {
     return this.upload.generateUploadUrl(
       user.sub,
       body.filename,
@@ -57,10 +49,7 @@ export class UploadController {
 
   // ✅ YANGI ENDPOINT — qo'shimcha
   @Post('presign')
-  getPresignedUrl(
-    @CurrentUser() user: any,
-    @Body() dto: PresignDto,
-  ) {
+  getPresignedUrl(@CurrentUser() user: any, @Body() dto: PresignDto) {
     return this.upload.getPresignedUploadUrl({
       folder: dto.folder,
       fileName: dto.fileName,
