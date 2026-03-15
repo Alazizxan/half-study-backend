@@ -1,5 +1,6 @@
 // ─── submissions/dto/create-submission.dto.ts ────────────────────────────────
-import { IsString, IsOptional } from 'class-validator';
+import { SubmissionStatus } from '@prisma/client';
+import { IsString, IsOptional, Max, Min, IsInt, IsEnum } from 'class-validator';
 
 export class CreateSubmissionDto {
   @IsString()
@@ -23,7 +24,16 @@ export class CreateSubmissionDto {
 }
 
 export class ReviewSubmissionDto {
-  status: import('@prisma/client').SubmissionStatus;
+  @IsEnum(SubmissionStatus)
+  status: SubmissionStatus;
+ 
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(10000)
   score?: number;
+ 
+  @IsOptional()
+  @IsString()
   feedback?: string;
 }

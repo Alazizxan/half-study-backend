@@ -6,24 +6,24 @@ import { Role } from '@prisma/client';
 
 @Injectable()
 export class AdminUsersService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService) { }
 
   async listUsers(page = 1, pageSize = 30, search?: string) {
     const where = search
       ? {
-          OR: [
-            { username:    { contains: search, mode: 'insensitive' as const } },
-            { email:       { contains: search, mode: 'insensitive' as const } },
-            { displayName: { contains: search, mode: 'insensitive' as const } },
-          ],
-        }
+        OR: [
+          { username: { contains: search, mode: 'insensitive' as const } },
+          { email: { contains: search, mode: 'insensitive' as const } },
+          { displayName: { contains: search, mode: 'insensitive' as const } },
+        ],
+      }
       : {};
 
     const [users, total] = await this.prisma.$transaction([
       this.prisma.user.findMany({
         where,
-        skip:    (page - 1) * pageSize,
-        take:    pageSize,
+        skip: (page - 1) * pageSize,
+        take: pageSize,
         orderBy: { createdAt: 'desc' },
         select: {
           id: true, username: true, email: true, displayName: true,
@@ -36,15 +36,35 @@ export class AdminUsersService {
       this.prisma.user.count({ where }),
     ]);
 
-    return { items: users, meta: { page, pageSize, total } };
+
+    const userIds = users.map((u) => u.id);
+
+    const balances = userIds.length
+      ? await this.prisma.coinEvent.groupBy({
+        by: ['userId'],
+        where: { userId: { in: userIds } },
+        _sum: { amount: true },
+      })
+      : [];
+
+    const balanceMap = new Map(
+      balances.map((b) => [b.userId, b._sum.amount ?? 0]),
+    );
+
+    const items = users.map((u) => ({
+      ...u,
+      balance: balanceMap.get(u.id) ?? 0,
+    }));
+
+    return { items, meta: { page, pageSize, total } };
   }
 
   async getUser(id: string) {
     const user = await this.prisma.user.findUnique({
       where: { id },
       include: {
-        enrollments:  { include: { course: { select: { title: true } } } },
-        coinEvents:   { orderBy: { createdAt: 'desc' }, take: 20 },
+        enrollments: { include: { course: { select: { title: true } } } },
+        coinEvents: { orderBy: { createdAt: 'desc' }, take: 20 },
         achievements: { include: { achievement: true } },
         _count: {
           select: { enrollments: true, referrals: true, submissions: true },
@@ -55,7 +75,7 @@ export class AdminUsersService {
 
     const balance = await this.prisma.coinEvent.aggregate({
       where: { userId: id },
-      _sum:  { amount: true },
+      _sum: { amount: true },
     });
 
     return { ...user, balance: balance._sum.amount ?? 0 };
@@ -78,7 +98,7 @@ export class AdminUsersService {
     await this._findOrThrow(userId);
     return this.prisma.user.update({
       where: { id: userId },
-      data:  { lockedUntil: null, failedAttempts: 0 },
+      data: { lockedUntil: null, failedAttempts: 0 },
     });
   }
 
@@ -90,7 +110,7 @@ export class AdminUsersService {
       });
       const agg = await tx.coinEvent.aggregate({
         where: { userId },
-        _sum:  { amount: true },
+        _sum: { amount: true },
       });
       return { newBalance: agg._sum.amount ?? 0 };
     });

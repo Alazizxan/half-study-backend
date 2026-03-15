@@ -104,7 +104,7 @@ export class AuthService {
       },
     });
 
-    // 🔥 STREAK SYSTEM
+    
 
     const today = new Date();
     const yesterday = new Date();

@@ -23,7 +23,6 @@ export class QuizService {
     });
     if (!lesson) throw new NotFoundException('Lesson not found');
 
-    // Each lesson can only have one quiz
     const existing = await this.prisma.quiz.findUnique({
       where: { lessonId: dto.lessonId },
     });
@@ -40,7 +39,6 @@ export class QuizService {
             questions.map(async (q, idx) => {
               const { options, flagAnswer, ...qData } = q;
 
-              // Hash flag answer
               const hashedFlag = flagAnswer
                 ? await bcrypt.hash(flagAnswer.trim().toLowerCase(), 10)
                 : undefined;
@@ -84,6 +82,10 @@ export class QuizService {
 
     // If questions are being updated — replace all
     if (questions) {
+      // QuizAnswer da questionId FK (RESTRICT) bor — avval o'chir
+      await this.prisma.quizAnswer.deleteMany({
+        where: { question: { quizId: id } },
+      });
       await this.prisma.question.deleteMany({ where: { quizId: id } });
     }
 
@@ -131,6 +133,13 @@ export class QuizService {
     if (actor.role !== Role.ADMIN) throw new ForbiddenException();
     const quiz = await this.prisma.quiz.findUnique({ where: { id } });
     if (!quiz) throw new NotFoundException();
+
+    // FK tartibida o'chirish
+    await this.prisma.quizAnswer.deleteMany({
+      where: { question: { quizId: id } },
+    });
+    await this.prisma.quizAttempt.deleteMany({ where: { quizId: id } });
+    await this.prisma.question.deleteMany({ where: { quizId: id } });
     return this.prisma.quiz.delete({ where: { id } });
   }
 
@@ -144,7 +153,7 @@ export class QuizService {
           include: {
             options: {
               orderBy: { order: 'asc' },
-              select: { id: true, text: true, order: true }, // NO isCorrect
+              select: { id: true, text: true, order: true },
             },
           },
         },
@@ -152,7 +161,6 @@ export class QuizService {
     });
     if (!quiz) return null;
 
-    // Attach user's attempt info
     const attempts = await this.prisma.quizAttempt.findMany({
       where: { quizId: quiz.id, userId },
       orderBy: { startedAt: 'desc' },
@@ -161,7 +169,6 @@ export class QuizService {
     const passed = attempts.some((a) => a.passed === true);
     const attemptsUsed = attempts.length;
 
-    // Shuffle questions if enabled
     const questions = quiz.shuffleQuestions
       ? [...quiz.questions].sort(() => Math.random() - 0.5)
       : quiz.questions;
@@ -221,7 +228,6 @@ export class QuizService {
         `Maximum ${quiz.maxAttempts} attempts reached`,
       );
 
-    // Cancel any existing IN_PROGRESS attempt
     await this.prisma.quizAttempt.updateMany({
       where: { quizId, userId, status: QuizAttemptStatus.IN_PROGRESS },
       data: { status: QuizAttemptStatus.FAILED },
@@ -257,7 +263,6 @@ export class QuizService {
     let earnedPoints = 0;
     let hasManualQuestions = false;
 
-    // Process each answer
     const answerCreates = await Promise.all(
       dto.answers.map(async (ans) => {
         const question = quiz.questions.find((q) => q.id === ans.questionId);
@@ -289,7 +294,6 @@ export class QuizService {
 
           case QuestionType.TEXT:
           case QuestionType.FILE_UPLOAD: {
-            // Manual grading — needs moderator/admin review
             isCorrect = null;
             hasManualQuestions = true;
             break;
@@ -310,12 +314,10 @@ export class QuizService {
       }),
     );
 
-    // Save answers
     await this.prisma.quizAnswer.createMany({
       data: answerCreates.filter(Boolean) as any[],
     });
 
-    // Calculate score percentage (only auto-graded questions)
     const autoTotal = quiz.questions
       .filter(
         (q) =>
@@ -327,16 +329,15 @@ export class QuizService {
       autoTotal > 0 ? Math.round((earnedPoints / autoTotal) * 100) : null;
 
     const passed =
-      scorePercent !== null ? scorePercent >= quiz.passingScore : null; // null = pending manual review
+      scorePercent !== null ? scorePercent >= quiz.passingScore : null;
 
     const status =
       hasManualQuestions && passed === null
-        ? QuizAttemptStatus.COMPLETED // wait for manual review
+        ? QuizAttemptStatus.COMPLETED
         : passed
           ? QuizAttemptStatus.PASSED
           : QuizAttemptStatus.FAILED;
 
-    // Update attempt
     const updated = await this.prisma.quizAttempt.update({
       where: { id: attemptId },
       data: {
@@ -413,7 +414,6 @@ export class QuizService {
       },
     });
 
-    // Recalculate attempt total score
     await this.recalculateAttemptScore(answer.attemptId);
 
     return updated;

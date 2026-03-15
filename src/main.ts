@@ -33,7 +33,7 @@ async function bootstrap() {
     ? path.resolve(process.env.UPLOAD_ROOT)
     : path.join(process.cwd(), 'uploads');
 
-  ['covers', 'pending', 'videos'].forEach(sub => {
+  ['covers', 'pending', 'videos','submissions'].forEach(sub => {
     const dir = path.join(uploadRoot, sub);
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
   });
@@ -42,6 +42,16 @@ async function bootstrap() {
     prefix: '/uploads',
     setHeaders: (res: any) => res.setHeader('Cache-Control', 'public, max-age=86400'),
   });
+
+ 
+  // ── Receipts static serving
+  const receiptRoot = process.env.RECEIPT_DIR
+    ? path.resolve(process.env.RECEIPT_DIR)
+    : path.join(process.cwd(), 'receipts');
+ 
+  if (!fs.existsSync(receiptRoot)) fs.mkdirSync(receiptRoot, { recursive: true });
+ 
+  app.useStaticAssets(receiptRoot, { prefix: '/receipts' });
 
   app.useGlobalPipes(
     new ValidationPipe({

@@ -46,7 +46,7 @@ export class WalletAdminController {
 
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
 
-    // content-type ni minimal
+
     res.setHeader('Content-Type', 'application/octet-stream');
 
     const stream = fs.createReadStream(filePath);

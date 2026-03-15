@@ -20,13 +20,13 @@ const COIN_PACKS: Record<number, number> = {
   150: 800000,
 };
 
-// admin qabul qiladigan karta (frontendga ko'rsatish uchun)
 const PAY_TO_CARD = '8600 1234 5678 9012';
 
-// receiptlar saqlanadigan joy (Linux VPS)
-const RECEIPT_DIR = '/var/www/receipts';
+// Windows local dev: ./receipts  |  Production Linux: /var/www/receipts
+const RECEIPT_DIR = process.env.RECEIPT_DIR
+  ? path.resolve(process.env.RECEIPT_DIR)
+  : path.join(process.cwd(), 'receipts');
 
-// custom narx: 25 coin = 150000 => 1 coin = 6000
 const CUSTOM_PRICE_PER_COIN_UZS = 6000;
 
 @Injectable()
@@ -38,7 +38,6 @@ export class WalletService {
       where: { userId },
       _sum: { amount: true },
     });
-
     return { balance: sum._sum.amount || 0 };
   }
 
@@ -47,9 +46,7 @@ export class WalletService {
       throw new BadRequestException('Cannot transfer to yourself');
 
     return this.prisma.$transaction(async (tx) => {
-      const target = await tx.user.findUnique({
-        where: { id: dto.toUserId },
-      });
+      const target = await tx.user.findUnique({ where: { id: dto.toUserId } });
       if (!target) throw new BadRequestException('Target user not found');
 
       const balanceAgg = await tx.coinEvent.aggregate({
@@ -77,21 +74,11 @@ export class WalletService {
         throw new ForbiddenException('Daily transfer limit exceeded');
 
       await tx.coinEvent.create({
-        data: {
-          userId: fromUserId,
-          amount: -dto.amount,
-          reason: CoinReason.TRANSFER_OUT,
-        },
+        data: { userId: fromUserId, amount: -dto.amount, reason: CoinReason.TRANSFER_OUT },
       });
-
       await tx.coinEvent.create({
-        data: {
-          userId: dto.toUserId,
-          amount: dto.amount,
-          reason: CoinReason.TRANSFER_IN,
-        },
+        data: { userId: dto.toUserId, amount: dto.amount, reason: CoinReason.TRANSFER_IN },
       });
-
       await tx.auditLog.create({
         data: {
           action: AuditAction.COIN_TRANSFER,
@@ -109,7 +96,6 @@ export class WalletService {
 
   private maskCard(cardNumber: string) {
     const digits = (cardNumber || '').replace(/\D/g, '');
-    // minimal karta length
     if (digits.length < 12) throw new BadRequestException('INVALID_CARD');
     const last4 = digits.slice(-4);
     return `${digits.slice(0, 4)} **** **** ${last4}`;
@@ -117,14 +103,10 @@ export class WalletService {
 
   private calcAmountUzs(coins: number) {
     if (COIN_PACKS[coins]) return COIN_PACKS[coins];
-
     if (!Number.isFinite(coins) || coins <= 0)
       throw new BadRequestException('INVALID_COINS');
-
-    // custom: butun coin bo'lsin
     if (!Number.isInteger(coins))
       throw new BadRequestException('COINS_MUST_BE_INTEGER');
-
     return coins * CUSTOM_PRICE_PER_COIN_UZS;
   }
 
@@ -136,13 +118,10 @@ export class WalletService {
     if (!Number.isFinite(coins) || coins <= 0)
       throw new BadRequestException('INVALID_COINS');
 
-    const amountUzs = this.calcAmountUzs(coins);
+    const amountUzs  = this.calcAmountUzs(coins);
     const cardMasked = this.maskCard(dto?.cardNumber);
+    const expiresAt  = new Date(Date.now() + 30 * 60 * 1000);
 
-    // 30 minut vaqt
-    const expiresAt = new Date(Date.now() + 30 * 60 * 1000);
-
-    // bir vaqtning o'zida 1ta active request qoldiramiz (xohlasang o'zgartiramiz)
     const active = await this.prisma.coinPurchaseRequest.findFirst({
       where: {
         userId,
@@ -227,14 +206,13 @@ export class WalletService {
       .replace(/\s+/g, '_')}`;
 
     const dest = path.join(RECEIPT_DIR, safeName);
-
-    // move file
     fs.renameSync(tempPath, dest);
 
+    // ← YAGONA O'ZGARISH: dest o'rniga safeName (faqat filename)
     await this.prisma.coinPurchaseRequest.update({
       where: { id: requestId },
       data: {
-        receiptFileKey: dest,
+        receiptFileKey: safeName,
         status: PurchaseStatus.UNDER_REVIEW,
       },
     });
@@ -264,7 +242,7 @@ export class WalletService {
   }
 
   async adminListPurchaseRequests(status?: string, page = 1, pageSize = 20) {
-    const skip = (page - 1) * pageSize;
+    const skip  = (page - 1) * pageSize;
     const where: any = {};
     if (status) where.status = status;
 
@@ -304,6 +282,7 @@ export class WalletService {
 
       if (!req) throw new NotFoundException('REQUEST_NOT_FOUND');
 
+      // Idempotent — allaqachon approved
       if (req.status === PurchaseStatus.APPROVED) {
         const bal = await tx.coinEvent.aggregate({
           where: { userId: req.userId },
@@ -312,24 +291,13 @@ export class WalletService {
         return { approved: true, newBalance: bal._sum.amount || 0 };
       }
 
-      if (new Date() > new Date(req.expiresAt)) {
-        await tx.coinPurchaseRequest.update({
-          where: { id: requestId },
-          data: {
-            status: PurchaseStatus.EXPIRED,
-            reviewedById: adminId,
-            reviewedAt: new Date(),
-            adminNote: note || null,
-          },
-        });
-        throw new BadRequestException('REQUEST_EXPIRED');
+      // ← O'ZGARISH: expired tekshiruvi olib tashlandi
+      // Admin istalgan vaqtda (EXPIRED, UNDER_REVIEW, AWAITING_RECEIPT) approve qila oladi
+      // Faqat REJECTED ni bloklash
+      if (req.status === PurchaseStatus.REJECTED) {
+        throw new BadRequestException('ALREADY_REJECTED');
       }
 
-      if (req.status !== PurchaseStatus.UNDER_REVIEW) {
-        throw new BadRequestException('INVALID_STATUS');
-      }
-
-      // ✅ COIN berish faqat approve’da
       await tx.coinEvent.create({
         data: {
           userId: req.userId,
@@ -353,7 +321,7 @@ export class WalletService {
           userId: req.userId,
           type: NotificationType.SYSTEM,
           title: 'Coins added',
-          body: `${req.coins} coin balansingizga qo‘shildi.`,
+          body: `${req.coins} coin balansingizga qo'shildi.`,
           link: '/wallet',
         },
       });
@@ -394,7 +362,7 @@ export class WalletService {
           userId: req.userId,
           type: NotificationType.SYSTEM,
           title: 'Purchase rejected',
-          body: `To‘lov rad etildi: ${note || 'Sabab ko‘rsatilmagan'}`,
+          body: `To'lov rad etildi: ${note || "Sabab ko'rsatilmagan"}`,
           link: '/wallet',
         },
       });
@@ -416,9 +384,6 @@ export class WalletService {
       this.prisma.coinEvent.count({ where: { userId } }),
     ]);
 
-    return {
-      items,
-      meta: { page, pageSize, total },
-    };
+    return { items, meta: { page, pageSize, total } };
   }
 }
